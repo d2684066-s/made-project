@@ -1,0 +1,169 @@
+<div class="space-y-6 p-6 bg-background min-h-screen">
+  <!-- Header -->
+  <div class="flex items-center justify-between">
+    <div>
+      <h1 class="text-3xl font-bold text-primary">{{ 'admin.bookings' | translate }}</h1>
+      <p class="text-muted-foreground mt-1">{{ 'admin.bookingsDescription' | translate }}</p>
+    </div>
+    <div class="text-lg font-semibold text-primary">
+      {{ bookings().length }} {{ 'admin.total' | translate }}
+    </div>
+  </div>
+
+  <!-- Filter Section -->
+  <div class="bg-white rounded-lg shadow p-4 border border-border">
+    <label class="block text-sm font-medium mb-2">Filter by Status</label>
+    <select 
+      [(ngModel)]="statusFilter" 
+      (change)="onFilterChange()"
+      class="w-full md:w-64 px-4 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+      <option *ngFor="let option of statusOptions" [value]="option.value">
+        {{ option.label }}
+      </option>
+    </select>
+  </div>
+
+  <!-- Loading State -->
+  <div *ngIf="loading()" class="text-center py-8">
+    <p class="text-muted-foreground">{{ 'admin.loading' | translate }}</p>
+  </div>
+
+  <!-- Bookings Table -->
+  <div *ngIf="!loading() && bookings().length > 0" class="bg-white rounded-lg shadow overflow-hidden border border-border">
+    <div class="overflow-x-auto">
+      <table class="w-full">
+        <thead class="bg-muted border-b border-border">
+          <tr>
+            <th class="px-6 py-3 text-left text-sm font-semibold text-foreground">Student ID</th>
+            <th class="px-6 py-3 text-left text-sm font-semibold text-foreground">Student Name</th>
+            <th class="px-6 py-3 text-left text-sm font-semibold text-foreground">Phone</th>
+            <th class="px-6 py-3 text-left text-sm font-semibold text-foreground">Place</th>
+            <th class="px-6 py-3 text-left text-sm font-semibold text-foreground">Status</th>
+            <th class="px-6 py-3 text-left text-sm font-semibold text-foreground">Driver</th>
+            <th class="px-6 py-3 text-left text-sm font-semibold text-foreground">Created At</th>
+            <th class="px-6 py-3 text-center text-sm font-semibold text-foreground">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-border">
+          <tr *ngFor="let booking of bookings()" class="hover:bg-muted/50 transition">
+            <td class="px-6 py-4 text-sm text-foreground">{{ booking.student_registration_id }}</td>
+            <td class="px-6 py-4 text-sm text-foreground">{{ booking.student_name || '-' }}</td>
+            <td class="px-6 py-4 text-sm text-foreground">{{ booking.phone }}</td>
+            <td class="px-6 py-4 text-sm text-foreground">{{ getPlaceName(booking.place) }}</td>
+            <td class="px-6 py-4 text-sm">
+              <span [class]="'px-3 py-1 rounded-full text-xs font-semibold ' + getStatusColor(booking.status)">
+                {{ booking.status | uppercase }}
+              </span>
+            </td>
+            <td class="px-6 py-4 text-sm text-foreground">{{ booking.driver_name || '-' }}</td>
+            <td class="px-6 py-4 text-sm text-muted-foreground">
+              {{ booking.created_at ? (booking.created_at | date: 'short') : '-' }}
+            </td>
+            <td class="px-6 py-4 text-center">
+              <div class="flex items-center justify-center gap-2">
+                <button 
+                  (click)="viewDetails(booking)"
+                  class="p-2 hover:bg-muted rounded transition"
+                  title="View Details">
+                  <lucide-angular [img]="Eye" class="w-4 h-4"></lucide-angular>
+                </button>
+                <button 
+                  (click)="deleteBooking(booking.id)"
+                  class="p-2 hover:bg-red-100 text-red-600 rounded transition"
+                  title="Delete Booking">
+                  <lucide-angular [img]="Trash2" class="w-4 h-4"></lucide-angular>
+                </button>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Empty State -->
+  <div *ngIf="!loading() && bookings().length === 0" class="bg-white rounded-lg shadow p-12 text-center border border-border">
+    <p class="text-muted-foreground">{{ 'admin.noBookings' | translate }}</p>
+  </div>
+
+  <!-- Booking Details Modal -->
+  <div *ngIf="selectedBooking()" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-lg shadow-lg max-w-md w-full max-h-96 overflow-y-auto">
+      <div class="p-6 border-b border-border flex items-center justify-between sticky top-0 bg-white">
+        <h2 class="text-xl font-bold">Booking Details</h2>
+        <button 
+          (click)="closeDetails()"
+          class="text-muted-foreground hover:text-foreground">
+          ✕
+        </button>
+      </div>
+      
+      <div class="p-6 space-y-4">
+        <div>
+          <label class="text-sm font-semibold text-muted-foreground">Student Registration ID</label>
+          <p class="text-foreground">{{ selectedBooking().student_registration_id }}</p>
+        </div>
+        
+        <div>
+          <label class="text-sm font-semibold text-muted-foreground">Student Name</label>
+          <p class="text-foreground">{{ selectedBooking().student_name || '-' }}</p>
+        </div>
+        
+        <div>
+          <label class="text-sm font-semibold text-muted-foreground">Phone Number</label>
+          <p class="flex items-center gap-2 text-foreground">
+            <lucide-angular [img]="Phone" class="w-4 h-4"></lucide-angular>
+            {{ selectedBooking().phone }}
+          </p>
+        </div>
+        
+        <div>
+          <label class="text-sm font-semibold text-muted-foreground">Pickup Location</label>
+          <p class="flex items-center gap-2 text-foreground">
+            <lucide-angular [img]="MapPin" class="w-4 h-4"></lucide-angular>
+            {{ getPlaceName(selectedBooking().place) }}
+          </p>
+        </div>
+        
+        <div>
+          <label class="text-sm font-semibold text-muted-foreground">Place Details</label>
+          <p class="text-foreground">{{ selectedBooking().place_details || '-' }}</p>
+        </div>
+        
+        <div>
+          <label class="text-sm font-semibold text-muted-foreground">Status</label>
+          <p>
+            <span [class]="'px-3 py-1 rounded-full text-xs font-semibold ' + getStatusColor(selectedBooking().status)">
+              {{ selectedBooking().status | uppercase }}
+            </span>
+          </p>
+        </div>
+        
+        <div>
+          <label class="text-sm font-semibold text-muted-foreground">Assigned Driver</label>
+          <p class="text-foreground">{{ selectedBooking().driver_name || 'Not assigned' }}</p>
+        </div>
+        
+        <div>
+          <label class="text-sm font-semibold text-muted-foreground">Vehicle Number</label>
+          <p class="text-foreground">{{ selectedBooking().vehicle_number || 'Not assigned' }}</p>
+        </div>
+        
+        <div>
+          <label class="text-sm font-semibold text-muted-foreground">OTP</label>
+          <p class="text-foreground font-mono font-bold">{{ selectedBooking().otp || '-' }}</p>
+        </div>
+        
+        <div>
+          <label class="text-sm font-semibold text-muted-foreground">ETA (Minutes)</label>
+          <p class="text-foreground">{{ selectedBooking().eta_minutes || '-' }}</p>
+        </div>
+        
+        <div>
+          <label class="text-sm font-semibold text-muted-foreground">Created At</label>
+          <p class="text-muted-foreground text-sm">{{ selectedBooking().created_at ? (selectedBooking().created_at | date: 'medium') : '-' }}</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

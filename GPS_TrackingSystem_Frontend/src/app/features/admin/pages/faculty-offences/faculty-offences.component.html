@@ -1,0 +1,125 @@
+<div class="p-6">
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-3xl font-bold">{{ 'FACULTY_OFFENCES' | translate }}</h1>
+        <button (click)="openForm()"
+            class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground shadow hover:bg-primary/90 h-10 px-4 py-2">
+            <lucide-icon name="plus" class="mr-2 h-4 w-4"></lucide-icon>
+            {{ 'ADD_OFFENCE' | translate }}
+        </button>
+    </div>
+
+    <!-- Create/Edit Form -->
+    <div *ngIf="showForm()" class="mb-6 p-4 border border-input rounded-lg bg-background">
+        <h2 class="text-xl font-semibold mb-4">{{ 'CREATE_FACULTY_OFFENCE' | translate }}</h2>
+        <div class="grid grid-cols-2 gap-4">
+            <div>
+                <label class="block text-sm font-medium mb-1">{{ 'FACULTY_ID' | translate }} *</label>
+                <input [(ngModel)]="formData.faculty_id" type="text"
+                    class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    placeholder="e.g., FAC-001">
+            </div>
+            <div>
+                <label class="block text-sm font-medium mb-1">{{ 'FACULTY_NAME' | translate }}</label>
+                <input [(ngModel)]="formData.faculty_name" type="text"
+                    class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    placeholder="Full name">
+            </div>
+            <div>
+                <label class="block text-sm font-medium mb-1">{{ 'VIOLATION_TYPE' | translate }}</label>
+                <select [(ngModel)]="formData.violation_type"
+                    class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+                    <option value="no_helmet">No Helmet</option>
+                    <option value="overspeed">Overspeed</option>
+                    <option value="traffic_light">Red Light</option>
+                    <option value="wrong_lane">Wrong Lane</option>
+                    <option value="other">Other</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium mb-1">{{ 'SEVERITY' | translate }}</label>
+                <select [(ngModel)]="formData.severity"
+                    class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+                    <option value="minor">Minor</option>
+                    <option value="major">Major</option>
+                    <option value="critical">Critical</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium mb-1">{{ 'FINE_AMOUNT' | translate }}</label>
+                <input [(ngModel)]="formData.fine_amount" type="number"
+                    class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    placeholder="₹500">
+            </div>
+            <div class="col-span-2">
+                <label class="block text-sm font-medium mb-1">{{ 'DESCRIPTION' | translate }}</label>
+                <textarea [(ngModel)]="formData.description"
+                    class="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    placeholder="Additional details..." rows="3"></textarea>
+            </div>
+        </div>
+        <div class="mt-4 flex gap-2">
+            <button (click)="createOffence()" [disabled]="loading()"
+                class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground shadow hover:bg-primary/90 h-10 px-4 py-2">
+                {{ 'SUBMIT' | translate }}
+            </button>
+            <button (click)="closeForm()"
+                class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-input bg-background shadow-sm hover:bg-accent h-10 px-4 py-2">
+                {{ 'CANCEL' | translate }}
+            </button>
+        </div>
+    </div>
+
+    <!-- Offences List -->
+    <div class="overflow-x-auto">
+        <table class="w-full border-collapse border border-input">
+            <thead class="bg-muted">
+                <tr>
+                    <th class="border border-input p-3 text-left font-medium">{{ 'FACULTY_ID' | translate }}</th>
+                    <th class="border border-input p-3 text-left font-medium">{{ 'FACULTY_NAME' | translate }}</th>
+                    <th class="border border-input p-3 text-left font-medium">{{ 'VIOLATION_TYPE' | translate }}</th>
+                    <th class="border border-input p-3 text-left font-medium">{{ 'SEVERITY' | translate }}</th>
+                    <th class="border border-input p-3 text-right font-medium">{{ 'FINE_AMOUNT' | translate }}</th>
+                    <th class="border border-input p-3 text-left font-medium">{{ 'STATUS' | translate }}</th>
+                    <th class="border border-input p-3 text-center font-medium">{{ 'ACTIONS' | translate }}</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr *ngFor="let offence of offences()" class="hover:bg-muted/50">
+                    <td class="border border-input p-3">{{ offence.faculty_id }}</td>
+                    <td class="border border-input p-3">{{ offence.faculty_name }}</td>
+                    <td class="border border-input p-3">{{ offence.violation_type }}</td>
+                    <td class="border border-input p-3">
+                        <span [class]="'px-2 py-1 rounded text-xs font-medium ' + getSeverityClass(offence.severity)">
+                            {{ offence.severity }}
+                        </span>
+                    </td>
+                    <td class="border border-input p-3 text-right">₹{{ offence.fine_amount }}</td>
+                    <td class="border border-input p-3">
+                        <span *ngIf="offence.is_paid" class="text-green-600 font-medium">{{ 'PAID' | translate }}</span>
+                        <span *ngIf="!offence.is_paid" class="text-red-600 font-medium">{{ 'UNPAID' | translate }}</span>
+                    </td>
+                    <td class="border border-input p-3 text-center flex gap-2 justify-center">
+                        <button *ngIf="!offence.is_paid" (click)="markAsPaid(offence)"
+                            class="text-xs px-2 py-1 rounded bg-green-600 text-white hover:bg-green-700">
+                            {{ 'MARK_PAID' | translate }}
+                        </button>
+                        <button (click)="deleteOffence(offence.id)"
+                            class="text-xs px-2 py-1 rounded bg-red-600 text-white hover:bg-red-700">
+                            <lucide-icon name="trash-2" class="h-4 w-4"></lucide-icon>
+                        </button>
+                    </td>
+                </tr>
+                <tr *ngIf="offences().length === 0">
+                    <td colspan="7" class="border border-input p-3 text-center text-muted-foreground">
+                        {{ 'NO_OFFENCES_FOUND' | translate }}
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Loading indicator -->
+    <div *ngIf="loading()" class="flex justify-center items-center p-8">
+        <div class="text-muted-foreground">{{ 'LOADING' | translate }}...</div>
+    </div>
+</div>

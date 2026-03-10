@@ -1,0 +1,70 @@
+<div class="min-h-screen bg-background text-foreground font-sans">
+  <!-- Mobile menu button -->
+  <div class="lg:hidden fixed top-4 left-4 z-50">
+    <button
+      class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-10 w-10"
+      (click)="mobileMenuOpen.set(!mobileMenuOpen())">
+      <lucide-icon [name]="mobileMenuOpen() ? 'x' : 'menu'" class="h-6 w-6"></lucide-icon>
+    </button>
+  </div>
+
+  <!-- Sidebar -->
+  <aside class="fixed inset-y-0 left-0 z-40 w-64 transform transition-transform duration-300 ease-in-out
+      lg:translate-x-0 bg-card/50 backdrop-blur-xl border-r border-border" [class.translate-x-0]="mobileMenuOpen()"
+    [class.-translate-x-full]="!mobileMenuOpen()">
+    <div class="flex flex-col h-full">
+      <!-- Logo -->
+      <div class="h-16 flex items-center px-6 border-b border-border">
+        <lucide-icon name="shield" class="h-8 w-8 text-sky-500 mr-3"></lucide-icon>
+        <div>
+          <h1 class="font-heading font-bold text-lg text-foreground">{{ 'ADMIN_DASHBOARD' | translate }}</h1>
+          <p class="text-xs text-muted-foreground">{{ 'LIVE_MONITORING_SUBTITLE' | translate }}</p>
+        </div>
+      </div>
+
+      <!-- Navigation -->
+      <div class="flex-1 py-4 overflow-y-auto">
+        <nav class="px-3 space-y-1">
+          <a *ngFor="let item of navItems" [routerLink]="item.path" routerLinkActive="active bg-sky-500/10 text-sky-500"
+            [routerLinkActiveOptions]="{exact: item.end}" (click)="mobileMenuOpen.set(false)"
+            class="flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-colors text-muted-foreground hover:text-foreground hover:bg-muted">
+            <lucide-icon [name]="item.iconName" class="h-5 w-5"></lucide-icon>
+            {{item.label | translate}}
+          </a>
+        </nav>
+      </div>
+
+      <!-- User section -->
+      <div class="p-4 border-t border-border">
+        <div class="flex items-center gap-3 mb-3">
+          <div class="w-10 h-10 rounded-full bg-sky-500/20 flex items-center justify-center">
+            <span class="text-sky-500 font-semibold">
+              {{user()?.name?.charAt(0)?.toUpperCase()}}
+            </span>
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-medium text-foreground truncate">{{user()?.name}}</p>
+            <p class="text-xs text-muted-foreground truncate">{{user()?.email}}</p>
+          </div>
+        </div>
+        <button
+          class="w-full justify-start text-muted-foreground hover:text-destructive flex items-center h-10 px-4 py-2 hover:bg-accent rounded-md text-sm font-medium transition-colors"
+          (click)="handleLogout()">
+          <lucide-icon name="log-out" class="h-4 w-4 mr-2"></lucide-icon>
+          {{ 'LOGOUT' | translate }}
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Mobile overlay -->
+  <div *ngIf="mobileMenuOpen()" class="fixed inset-0 bg-black/50 z-30 lg:hidden" (click)="mobileMenuOpen.set(false)">
+  </div>
+
+  <!-- Main content -->
+  <main class="lg:ml-64 min-h-screen">
+    <div class="p-6 lg:p-8">
+      <router-outlet></router-outlet>
+    </div>
+  </main>
+</div>

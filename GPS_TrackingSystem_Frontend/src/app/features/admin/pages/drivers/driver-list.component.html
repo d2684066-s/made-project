@@ -1,0 +1,42 @@
+<div class="p-6">
+  <div class="flex justify-between items-center mb-4">
+    <h1 class="text-3xl font-bold">{{ 'DRIVERS' | translate }}</h1>
+    <div class="flex items-center gap-2">
+      <input [(ngModel)]="searchTerm" (change)="search()" type="text" placeholder="{{'SEARCH'|translate}}"
+        class="rounded-md border border-input px-3 py-2 text-sm" />
+      <button (click)="search()" class="p-2 bg-primary text-white rounded"><lucide-icon name="search" class="h-4 w-4"></lucide-icon></button>
+    </div>
+  </div>
+
+  <div class="overflow-x-auto">
+    <table class="w-full border-collapse border border-input">
+      <thead class="bg-muted">
+        <tr>
+          <th class="border border-input p-2 text-left font-medium">{{ 'NAME' | translate }}</th>
+          <th class="border border-input p-2 text-left font-medium">{{ 'PHONE' | translate }}</th>
+          <th class="border border-input p-2 text-left font-medium">{{ 'REGISTRATION_ID' | translate }}</th>
+          <th class="border border-input p-2 text-center font-medium">{{ 'ACTIONS' | translate }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let d of drivers()" class="hover:bg-muted/50">
+          <td class="border border-input p-2">{{ d.name }}</td>
+          <td class="border border-input p-2">{{ d.phone }}</td>
+          <td class="border border-input p-2">{{ d.registration_id }}</td>
+          <td class="border border-input p-2 text-center">
+            <button (click)="deleteDriver(d.id)"
+              class="text-xs px-2 py-1 rounded bg-red-600 text-white hover:bg-red-700">
+              <lucide-icon name="trash-2" class="h-4 w-4"></lucide-icon>
+            </button>
+          </td>
+        </tr>
+        <tr *ngIf="drivers().length === 0">
+          <td colspan="4" class="border border-input p-2 text-center text-muted-foreground">
+            {{ 'NO_RECORDS_FOUND' | translate }}
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div *ngIf="loading()" class="flex justify-center p-4">{{ 'LOADING' | translate }}...</div>
+</div>

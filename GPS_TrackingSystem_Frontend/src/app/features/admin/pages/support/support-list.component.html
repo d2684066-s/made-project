@@ -1,0 +1,42 @@
+<div class="space-y-4">
+  <h2 class="text-2xl font-bold">{{ 'SUPPORT_TICKETS' | translate }}</h2>
+
+  <div *ngIf="loading()" class="py-20 text-center text-slate-500">
+    {{ 'LOADING' | translate }}...
+  </div>
+
+  <table *ngIf="!loading()" class="w-full table-auto">
+    <thead>
+      <tr class="bg-slate-100">
+        <th class="p-2 text-left text-xs font-semibold">ID</th>
+        <th class="p-2 text-left text-xs font-semibold">Role</th>
+        <th class="p-2 text-left text-xs font-semibold">Message</th>
+        <th class="p-2 text-left text-xs font-semibold">Screenshot</th>
+        <th class="p-2 text-left text-xs font-semibold">Created</th>
+        <th class="p-2 text-center text-xs font-semibold">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr *ngFor="let it of issues()">
+        <td class="p-2 text-sm">{{it.id}}</td>
+        <td class="p-2 text-sm capitalize">{{it.user_role}}</td>
+        <td class="p-2 text-sm">{{it.message}}</td>
+        <td class="p-2 text-sm">
+          <a *ngIf="it.screenshot_url" [href]="it.screenshot_url" target="_blank" class="text-blue-500 underline">View</a>
+        </td>
+        <td class="p-2 text-sm">{{it.created_at | date:'short'}}</td>
+        <td class="p-2 text-center flex justify-center gap-2">
+          <button (click)="push(it.id)" title="Push to App" class="text-green-600 hover:text-green-800">
+            <lucide-icon [name]="'arrow-up'" class="h-4 w-4" />
+          </button>
+          <button (click)="delete(it.id)" title="Delete" class="text-red-600 hover:text-red-800">
+            <lucide-icon [name]="'trash-2'" class="h-4 w-4" />
+          </button>
+        </td>
+      </tr>
+      <tr *ngIf="!issues().length">
+        <td colspan="6" class="p-4 text-center text-slate-500">{{ 'NO_ISSUES' | translate }}</td>
+      </tr>
+    </tbody>
+  </table>
+</div>

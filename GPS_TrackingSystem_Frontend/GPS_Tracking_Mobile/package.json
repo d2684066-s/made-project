@@ -1,0 +1,46 @@
+{
+  "name": "gce-public-driver-frontend",
+  "version": "1.0.0",
+  "description": "GCE Public and Driver Frontend (Standalone)",
+  "private": true,
+  "dependencies": {
+    "@react-google-maps/api": "^2.20.8",
+    "autoprefixer": "^10.4.24",
+    "axios": "^1.6.0",
+    "leaflet": "^1.9.4",
+    "lucide-react": "^0.292.0",
+    "postcss": "^8.5.6",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-leaflet": "^4.2.1",
+    "react-router-dom": "^6.21.0",
+    "sonner": "^1.7.4",
+    "tailwindcss": "^3.4.19"
+  },
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject"
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app"
+    ]
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "devDependencies": {
+    "react-scripts": "5.0.1"
+  }
+}

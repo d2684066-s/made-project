@@ -1,0 +1,28 @@
+<div class="p-6">
+  <h1 class="text-3xl font-bold mb-4">{{ 'OFFENCES' | translate }}</h1>
+
+  <div *ngIf="loading()" class="mb-4">
+    <div class="text-muted-foreground">{{ 'LOADING' | translate }}...</div>
+  </div>
+
+  <div class="grid grid-cols-2 gap-6 mb-6">
+    <a routerLink="/admin/student-offences" class="p-6 border rounded-lg hover:bg-muted/50">
+      <div class="flex items-center gap-2">
+        <lucide-icon name="graduation-cap" class="h-6 w-6"></lucide-icon>
+        <span>{{ 'STUDENT_OFFENCES' | translate }}</span>
+      </div>
+      <div class="mt-2 text-sm text-muted-foreground">
+        {{ 'TOTAL_STUDENT_OFFENCES' | translate }}: {{ studentCount() }}
+      </div>
+    </a>
+    <a routerLink="/admin/faculty-offences" class="p-6 border rounded-lg hover:bg-muted/50">
+      <div class="flex items-center gap-2">
+        <lucide-icon name="user-cog" class="h-6 w-6"></lucide-icon>
+        <span>{{ 'FACULTY_OFFENCES' | translate }}</span>
+      </div>
+      <div class="mt-2 text-sm text-muted-foreground">
+        {{ 'TOTAL_FACULTY_OFFENCES' | translate }}: {{ facultyCount() }}
+      </div>
+    </a>
+  </div>
+</div>

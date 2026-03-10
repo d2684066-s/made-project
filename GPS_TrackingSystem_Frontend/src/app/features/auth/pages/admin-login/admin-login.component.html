@@ -1,0 +1,53 @@
+<div class="min-h-screen bg-background flex flex-col items-center justify-center p-4">
+    <!-- top bar with new admin button -->
+    <div class="w-full max-w-md flex justify-end mb-6">
+        <a routerLink="/admin/signup" class="px-4 py-2 text-xs font-medium bg-sky-500 text-white rounded hover:bg-sky-600 transition-colors">
+            + New Admin
+        </a>
+    </div>
+    <div class="w-full max-w-md space-y-8 bg-card p-8 rounded-lg border border-border shadow-lg">
+        <div class="text-center">
+            <div class="mx-auto h-12 w-12 bg-sky-500/10 rounded-full flex items-center justify-center mb-4">
+                <lucide-icon name="shield" class="h-6 w-6 text-sky-500"></lucide-icon>
+            </div>
+            <h2 class="font-heading text-3xl font-bold text-foreground">{{ 'ADMIN_ACCESS' | translate }}</h2>
+            <p class="mt-2 text-sm text-muted-foreground">{{ 'SIGN_IN_TO_DASHBOARD' | translate }}</p>
+            <div class="mt-4 p-3 bg-blue-500/10 text-blue-500 text-xs rounded-md">
+                <p><strong>{{ 'DEMO_ACCESS' | translate }}</strong></p>
+                <p>{{ 'EMAIL' | translate }}: admin&#64;example.com</p>
+                <p>{{ 'PASSWORD' | translate }}: admin</p>
+            </div>
+        </div>
+
+        <form [formGroup]="loginForm" (ngSubmit)="onSubmit()" class="mt-8 space-y-6">
+            <div class="space-y-4">
+                <div>
+                    <label htmlFor="email" class="block text-sm font-medium text-foreground mb-2">
+                        {{ 'EMAIL_ADDRESS' | translate }}
+                    </label>
+                    <input id="email" type="email" formControlName="email"
+                        class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                        placeholder="admin&#64;example.com" />
+                </div>
+                <div>
+                    <label htmlFor="password" class="block text-sm font-medium text-foreground mb-2">
+                        {{ 'PASSWORD' | translate }}
+                    </label>
+                    <input id="password" type="password" formControlName="password"
+                        class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                        placeholder="••••••••" />
+                </div>
+            </div>
+
+            <div *ngIf="error()" class="p-3 rounded-md bg-destructive/15 text-destructive text-sm">
+                {{ error() }}
+            </div>
+
+            <button type="submit" [disabled]="loading() || loginForm.invalid"
+                class="w-full inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2">
+                <lucide-icon *ngIf="loading()" name="loader-2" class="mr-2 h-4 w-4 animate-spin"></lucide-icon>
+                {{ 'SIGN_IN' | translate }}
+            </button>
+        </form>
+    </div>
+</div>

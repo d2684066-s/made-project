@@ -1,0 +1,70 @@
+<div class="p-6">
+  <div class="flex justify-between items-center mb-6">
+    <h1 class="text-3xl font-bold">{{ 'ESP32_DEVICES' | translate }}</h1>
+    <button (click)="openForm()"
+      class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground shadow hover:bg-primary/90 h-10 px-4 py-2">
+      <lucide-icon name="plus" class="mr-2 h-4 w-4"></lucide-icon>
+      {{ 'ADD_DEVICE' | translate }}
+    </button>
+  </div>
+
+  <div *ngIf="showForm()" class="mb-6 p-4 border border-input rounded-lg bg-background">
+    <h2 class="text-xl font-semibold mb-4">{{ 'NEW_ESP32_DEVICE' | translate }}</h2>
+    <div class="grid grid-cols-2 gap-4">
+      <div>
+        <label class="block text-sm font-medium mb-1">{{ 'DEVICE_ID' | translate }}</label>
+        <input [(ngModel)]="formData.device_id" type="text" class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
+      </div>
+      <div>
+        <label class="block text-sm font-medium mb-1">{{ 'DEVICE_NAME' | translate }}</label>
+        <input [(ngModel)]="formData.device_name" type="text" class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
+      </div>
+      <div class="col-span-2">
+        <label class="block text-sm font-medium mb-1">{{ 'DESCRIPTION' | translate }}</label>
+        <textarea [(ngModel)]="formData.description" class="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm" rows="2"></textarea>
+      </div>
+    </div>
+    <div class="mt-4 flex gap-2">
+      <button (click)="addDevice()" [disabled]="loading()" class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground shadow hover:bg-primary/90 h-10 px-4 py-2">
+        {{ 'SUBMIT' | translate }}
+      </button>
+      <button (click)="closeForm()" class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-input bg-background shadow-sm hover:bg-accent h-10 px-4 py-2">
+        {{ 'CANCEL' | translate }}
+      </button>
+    </div>
+  </div>
+
+  <div class="overflow-x-auto">
+    <table class="w-full border-collapse border border-input">
+      <thead class="bg-muted">
+        <tr>
+          <th class="border border-input p-3 text-left font-medium">{{ 'DEVICE_ID' | translate }}</th>
+          <th class="border border-input p-3 text-left font-medium">{{ 'DEVICE_NAME' | translate }}</th>
+          <th class="border border-input p-3 text-left font-medium">{{ 'DESCRIPTION' | translate }}</th>
+          <th class="border border-input p-3 text-center font-medium">{{ 'ACTIONS' | translate }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let dev of devices()" class="hover:bg-muted/50">
+          <td class="border border-input p-3">{{ dev.device_id }}</td>
+          <td class="border border-input p-3">{{ dev.device_name }}</td>
+          <td class="border border-input p-3">{{ dev.description }}</td>
+          <td class="border border-input p-3 text-center">
+            <button (click)="deleteDevice(dev.id)" class="text-xs px-2 py-1 rounded bg-red-600 text-white hover:bg-red-700">
+              <lucide-icon name="trash-2" class="h-4 w-4"></lucide-icon>
+            </button>
+          </td>
+        </tr>
+        <tr *ngIf="devices().length === 0">
+          <td colspan="4" class="border border-input p-3 text-center text-muted-foreground">
+            {{ 'NO_DEVICES_FOUND' | translate }}
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div *ngIf="loading()" class="flex justify-center items-center p-8">
+    <div class="text-muted-foreground">{{ 'LOADING' | translate }}...</div>
+  </div>
+</div>

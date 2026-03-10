@@ -1,0 +1,124 @@
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="font-heading font-bold text-3xl text-foreground">{{ 'REGISTERED_VEHICLES' | translate }}</h1>
+            <p class="text-sm text-muted-foreground mt-1">{{ 'MANAGE_FLEET_DESC' | translate }}</p>
+        </div>
+        <button routerLink="/admin/add-vehicle"
+            class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 py-2">
+            <lucide-icon name="plus" class="h-4 w-4 mr-2"></lucide-icon>
+            {{ 'ADD_VEHICLE' | translate }}
+        </button>
+    </div>
+
+    <!-- Filters -->
+    <div class="flex items-center gap-4 bg-card p-4 rounded-lg border border-border">
+        <div class="relative flex-1 max-w-sm">
+            <lucide-icon name="search" class="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground"></lucide-icon>
+            <input type="text" placeholder="{{ 'SEARCH_BY_VEHICLE_OR_DRIVER' | translate }}"
+                class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 pl-9 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50" />
+        </div>
+        <select
+            class="flex h-9 w-[180px] rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50">
+            <option value="all">{{ 'ALL_TYPES' | translate }}</option>
+            <option value="bus">{{ 'BUS' | translate }}</option>
+            <option value="ambulance">{{ 'AMBULANCE' | translate }}</option>
+        </select>
+    </div>
+
+    <!-- Vehicle Table -->
+    <div class="rounded-lg border border-border bg-card overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead>
+                    <tr class="border-b border-border bg-muted/50">
+                        <th class="text-left py-3 px-4 text-sm font-semibold text-muted-foreground uppercase">{{
+                            'VEHICLE_TYPE_HEADER' | translate }}</th>
+                        <th class="text-left py-3 px-4 text-sm font-semibold text-muted-foreground uppercase">{{
+                            'NUMBER' | translate }}</th>
+                        <th class="text-left py-3 px-4 text-sm font-semibold text-muted-foreground uppercase">{{
+                            'ASSIGNED_DRIVER' | translate }}</th>
+                        <th class="text-left py-3 px-4 text-sm font-semibold text-muted-foreground uppercase">{{
+                            'STATUS' | translate }}</th>
+                        <th class="text-right py-3 px-4 text-sm font-semibold text-muted-foreground uppercase">{{
+                            'ACTIONS' | translate }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr *ngIf="loading()" class="border-b border-border">
+                        <td colspan="5" class="py-8 text-center text-muted-foreground">
+                            <div class="flex items-center justify-center">
+                                <lucide-icon name="loader-2" class="h-6 w-6 animate-spin mr-2"></lucide-icon>
+                                {{ 'LOADING_VEHICLES' | translate }}
+                            </div>
+                        </td>
+                    </tr>
+
+                    <tr *ngIf="!loading() && vehicles().length === 0" class="border-b border-border">
+                        <td colspan="5" class="py-8 text-center text-muted-foreground">
+                            {{ 'NO_VEHICLES_FOUND' | translate }}
+                        </td>
+                    </tr>
+
+                    <tr *ngFor="let vehicle of vehicles()"
+                        class="border-b border-border hover:bg-muted/50 transition-colors">
+                        <td class="py-3 px-4">
+                            <div class="flex items-center gap-2">
+                                <div [class]="vehicle.vehicle_type === 'ambulance' ? 'bg-red-500/10 text-red-500' : 'bg-blue-500/10 text-blue-500'"
+                                    class="p-2 rounded-lg">
+                                    <lucide-icon [name]="vehicle.vehicle_type === 'ambulance' ? 'ambulance' : 'bus'"
+                                        class="h-5 w-5"></lucide-icon>
+                                </div>
+                                <span class="capitalize font-medium">{{ (vehicle.vehicle_type | uppercase) | translate }}</span>
+                            </div>
+                        </td>
+                        <td class="py-3 px-4 font-mono font-medium">{{vehicle.vehicle_number}}</td>
+                        <td class="py-3 px-4">
+                            <div class="flex items-center gap-2">
+                                <div
+                                    class="h-6 w-6 rounded-full bg-accent flex items-center justify-center text-xs font-medium">
+                                    {{vehicle.assigned_driver_name ? vehicle.assigned_driver_name.charAt(0) : '?'}}
+                                </div>
+                                <span>{{vehicle.assigned_driver_name || ('UNASSIGNED' | translate)}}</span>
+                            </div>
+                        </td>
+                        <td class="py-3 px-4">
+                            <span
+                                class="inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ring-1 ring-inset"
+                                [ngClass]="{
+                  'bg-green-500/10 text-green-500 ring-green-500/20': vehicle.is_out_of_station === false,
+                  'bg-zinc-500/10 text-zinc-500 ring-zinc-500/20': vehicle.is_out_of_station === true
+                }">
+                                {{ (vehicle.is_out_of_station ? 'OUT_OF_STATION' : 'ACTIVE') | translate }}
+                            </span>
+                        </td>
+                        <td class="py-3 px-4 text-right">
+                            <button (click)="deleteVehicle(vehicle.id)"
+                                class="text-destructive hover:text-foreground p-2 rounded-md hover:bg-accent transition-colors">
+                                <lucide-icon name="trash-2" class="h-4 w-4"></lucide-icon>
+                            </button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        <div class="flex items-center justify-between px-4 py-4 border-t border-border bg-muted/20">
+            <p class="text-sm text-muted-foreground">
+                {{ 'SHOWING' | translate }} <span class="font-medium">1</span> {{ 'TO' | translate }} <span
+                    class="font-medium">{{vehicles().length}}</span> {{ 'OF' | translate }}
+                <span class="font-medium">{{vehicles().length}}</span> {{ 'RESULTS' | translate }}
+            </p>
+            <div class="flex items-center gap-2">
+                <button disabled
+                    class="px-3 py-1 rounded-md text-sm border border-input bg-background hover:bg-accent disabled:opacity-50">{{
+                    'PREVIOUS' | translate }}</button>
+                <button disabled
+                    class="px-3 py-1 rounded-md text-sm border border-input bg-background hover:bg-accent disabled:opacity-50">{{
+                    'NEXT' | translate }}</button>
+            </div>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,198 @@
+<div class="space-y-6 p-6 bg-background min-h-screen">
+  <!-- Header -->
+  <div class="flex items-center justify-between">
+    <div>
+      <h1 class="text-3xl font-bold text-primary">{{ 'admin.trips' | translate }}</h1>
+      <p class="text-muted-foreground mt-1">{{ 'admin.tripsDescription' | translate }}</p>
+    </div>
+    <div class="text-lg font-semibold text-primary">
+      {{ trips().length }} {{ 'admin.total' | translate }}
+    </div>
+  </div>
+
+  <!-- Filter Section -->
+  <div class="bg-white rounded-lg shadow p-4 border border-border space-y-4">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <!-- Vehicle Type Filter -->
+      <div>
+        <label class="block text-sm font-medium mb-2">Filter by Vehicle Type</label>
+        <select 
+          [(ngModel)]="vehicleTypeFilter" 
+          (change)="onFilterChange()"
+          class="w-full px-4 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+          <option *ngFor="let option of vehicleTypeOptions" [value]="option.value">
+            {{ option.label }}
+          </option>
+        </select>
+      </div>
+      
+      <!-- Status Filter -->
+      <div>
+        <label class="block text-sm font-medium mb-2">Trip Status</label>
+        <div class="flex gap-2">
+          <button 
+            (click)="toggleActiveFilter(true)"
+            [class.bg-primary text-white]="activeFilter()"
+            [class.bg-muted text-foreground]="!activeFilter()"
+            class="px-4 py-2 rounded-lg transition font-medium">
+            Active Trips
+          </button>
+          <button 
+            (click)="toggleActiveFilter(false)"
+            [class.bg-primary text-white]="!activeFilter()"
+            [class.bg-muted text-foreground]="activeFilter()"
+            class="px-4 py-2 rounded-lg transition font-medium">
+            Completed
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading State -->
+  <div *ngIf="loading()" class="text-center py-8">
+    <p class="text-muted-foreground">{{ 'admin.loading' | translate }}</p>
+  </div>
+
+  <!-- Trips Table -->
+  <div *ngIf="!loading() && trips().length > 0" class="bg-white rounded-lg shadow overflow-hidden border border-border">
+    <div class="overflow-x-auto">
+      <table class="w-full">
+        <thead class="bg-muted border-b border-border">
+          <tr>
+            <th class="px-6 py-3 text-left text-sm font-semibold text-foreground">Vehicle</th>
+            <th class="px-6 py-3 text-left text-sm font-semibold text-foreground">Driver</th>
+            <th class="px-6 py-3 text-left text-sm font-semibold text-foreground">Type</th>
+            <th class="px-6 py-3 text-left text-sm font-semibold text-foreground">Start Time</th>
+            <th class="px-6 py-3 text-left text-sm font-semibold text-foreground">Duration</th>
+            <th class="px-6 py-3 text-left text-sm font-semibold text-foreground">Status</th>
+            <th class="px-6 py-3 text-center text-sm font-semibold text-foreground">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-border">
+          <tr *ngFor="let trip of trips()" class="hover:bg-muted/50 transition">
+            <td class="px-6 py-4 text-sm font-semibold text-foreground flex items-center gap-2">
+              <lucide-angular [img]="Truck" class="w-4 h-4 text-primary"></lucide-angular>
+              {{ trip.vehicle_number }}
+            </td>
+            <td class="px-6 py-4 text-sm text-foreground flex items-center gap-2">
+              <lucide-angular [img]="User" class="w-4 h-4 text-muted-foreground"></lucide-angular>
+              {{ trip.driver_name || '-' }}
+            </td>
+            <td class="px-6 py-4 text-sm text-foreground">
+              <span class="px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
+                {{ trip.vehicle_type | uppercase }}
+              </span>
+            </td>
+            <td class="px-6 py-4 text-sm text-muted-foreground flex items-center gap-2">
+              <lucide-angular [img]="Clock" class="w-4 h-4"></lucide-angular>
+              {{ formatDate(trip.start_time) }}
+            </td>
+            <td class="px-6 py-4 text-sm font-semibold text-foreground">
+              {{ calculateDuration(trip.start_time, trip.end_time) }}
+            </td>
+            <td class="px-6 py-4 text-sm">
+              <span [class]="'px-3 py-1 rounded-full text-xs font-semibold ' + getStatusBadge(trip)">
+                {{ getStatusText(trip) }}
+              </span>
+            </td>
+            <td class="px-6 py-4 text-center">
+              <div class="flex items-center justify-center gap-2">
+                <button 
+                  (click)="viewDetails(trip)"
+                  class="p-2 hover:bg-muted rounded transition"
+                  title="View Details">
+                  <lucide-angular [img]="Eye" class="w-4 h-4"></lucide-angular>
+                </button>
+                <button 
+                  (click)="deleteTrip(trip.id)"
+                  class="p-2 hover:bg-red-100 text-red-600 rounded transition"
+                  title="Delete Trip">
+                  <lucide-angular [img]="Trash2" class="w-4 h-4"></lucide-angular>
+                </button>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Empty State -->
+  <div *ngIf="!loading() && trips().length === 0" class="bg-white rounded-lg shadow p-12 text-center border border-border">
+    <p class="text-muted-foreground">{{ 'admin.noTrips' | translate }}</p>
+  </div>
+
+  <!-- Trip Details Modal -->
+  <div *ngIf="selectedTrip()" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-lg shadow-lg max-w-md w-full max-h-96 overflow-y-auto">
+      <div class="p-6 border-b border-border flex items-center justify-between sticky top-0 bg-white">
+        <h2 class="text-xl font-bold">Trip Details</h2>
+        <button 
+          (click)="closeDetails()"
+          class="text-muted-foreground hover:text-foreground">
+          ✕
+        </button>
+      </div>
+      
+      <div class="p-6 space-y-4">
+        <div>
+          <label class="text-sm font-semibold text-muted-foreground">Trip ID</label>
+          <p class="text-foreground font-mono text-xs break-all">{{ selectedTrip().id }}</p>
+        </div>
+        
+        <div>
+          <label class="text-sm font-semibold text-muted-foreground">Vehicle Number</label>
+          <p class="flex items-center gap-2 text-foreground">
+            <lucide-angular [img]="Truck" class="w-4 h-4"></lucide-angular>
+            {{ selectedTrip().vehicle_number }}
+          </p>
+        </div>
+        
+        <div>
+          <label class="text-sm font-semibold text-muted-foreground">Driver Name</label>
+          <p class="flex items-center gap-2 text-foreground">
+            <lucide-angular [img]="User" class="w-4 h-4"></lucide-angular>
+            {{ selectedTrip().driver_name || '-' }}
+          </p>
+        </div>
+        
+        <div>
+          <label class="text-sm font-semibold text-muted-foreground">Vehicle Type</label>
+          <p class="text-foreground">
+            <span class="px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
+              {{ selectedTrip().vehicle_type | uppercase }}
+            </span>
+          </p>
+        </div>
+        
+        <div>
+          <label class="text-sm font-semibold text-muted-foreground">Start Time</label>
+          <p class="flex items-center gap-2 text-foreground">
+            <lucide-angular [img]="Clock" class="w-4 h-4"></lucide-angular>
+            {{ formatDate(selectedTrip().start_time) }}
+          </p>
+        </div>
+        
+        <div *ngIf="selectedTrip().end_time">
+          <label class="text-sm font-semibold text-muted-foreground">End Time</label>
+          <p class="text-foreground">{{ formatDate(selectedTrip().end_time) }}</p>
+        </div>
+        
+        <div>
+          <label class="text-sm font-semibold text-muted-foreground">Duration</label>
+          <p class="text-foreground font-semibold">{{ calculateDuration(selectedTrip().start_time, selectedTrip().end_time) }}</p>
+        </div>
+        
+        <div>
+          <label class="text-sm font-semibold text-muted-foreground">Status</label>
+          <p>
+            <span [class]="'px-3 py-1 rounded-full text-xs font-semibold ' + getStatusBadge(selectedTrip())">
+              {{ getStatusText(selectedTrip()) }}
+            </span>
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

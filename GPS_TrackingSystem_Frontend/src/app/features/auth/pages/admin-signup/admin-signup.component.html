@@ -1,0 +1,153 @@
+<div class="min-h-screen bg-background flex flex-col items-center justify-start p-4 pt-8">
+    <!-- Back Button -->
+    <div class="w-full max-w-md flex mb-6">
+        <button (click)="goBack()" class="flex items-center gap-2 text-sky-500 hover:text-sky-600 font-medium text-sm transition-colors">
+            <lucide-icon name="arrow-left" class="h-4 w-4"></lucide-icon>
+            Back to Login
+        </button>
+    </div>
+
+    <div class="w-full max-w-md space-y-8 bg-card p-8 rounded-lg border border-border shadow-lg" [class.opacity-50]="success()">
+        <!-- Success Message -->
+        <div *ngIf="success()" class="fixed inset-0 flex items-center justify-center bg-black/50 z-50">
+            <div class="bg-white rounded-lg p-8 max-w-sm text-center shadow-xl animate-bounce">
+                <lucide-icon name="check-circle" class="h-12 w-12 text-green-500 mx-auto mb-4"></lucide-icon>
+                <h3 class="text-xl font-bold text-foreground mb-2">Request Submitted!</h3>
+                <p class="text-sm text-muted-foreground mb-4">
+                    Your admin request has been submitted to the developer panel. Please wait for approval.<br>
+                    <strong>You will be notified via email once approved.</strong>
+                </p>
+                <p class="text-xs text-gray-500">Redirecting to login...</p>
+            </div>
+        </div>
+
+        <!-- Header -->
+        <div class="text-center">
+            <div class="mx-auto h-12 w-12 bg-sky-500/10 rounded-full flex items-center justify-center mb-4">
+                <lucide-icon name="shield" class="h-6 w-6 text-sky-500"></lucide-icon>
+            </div>
+            <h2 class="font-heading text-3xl font-bold text-foreground">New Administrator</h2>
+            <p class="mt-2 text-sm text-muted-foreground">Register as a new administrator</p>
+        </div>
+
+        <!-- Alert Info -->
+        <div class="p-3 bg-blue-500/10 text-blue-800 text-xs rounded-md border border-blue-200 flex items-start gap-2">
+            <lucide-icon name="alert-circle" class="h-4 w-4 flex-shrink-0 mt-0.5"></lucide-icon>
+            <div>
+                <p><strong>Admin Registration</strong></p>
+                <p>Fill in the form below to register as an administrator. Your request will be reviewed by the developer panel before approval.</p>
+            </div>
+        </div>
+
+        <!-- Form -->
+        <form [formGroup]="signupForm" (ngSubmit)="onSubmit()" class="mt-8 space-y-4">
+            <!-- Name -->
+            <div>
+                <label htmlFor="name" class="block text-sm font-medium text-foreground mb-2">
+                    Full Name *
+                </label>
+                <input id="name" type="text" formControlName="name"
+                    class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    placeholder="Enter your full name" />
+                <span *ngIf="signupForm.get('name')?.touched && signupForm.get('name')?.errors" class="text-xs text-red-500 mt-1 block">
+                    {{ signupForm.get('name')?.errors | json }}
+                </span>
+            </div>
+
+            <!-- Email -->
+            <div>
+                <label htmlFor="email" class="block text-sm font-medium text-foreground mb-2">
+                    Email Address *
+                </label>
+                <input id="email" type="email" formControlName="email"
+                    class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    placeholder="admin@college.edu" />
+                <span *ngIf="signupForm.get('email')?.touched && signupForm.get('email')?.errors?.['email']" class="text-xs text-red-500 mt-1 block">
+                    Please enter a valid email address
+                </span>
+            </div>
+
+            <!-- DOB -->
+            <div>
+                <label htmlFor="dob" class="block text-sm font-medium text-foreground mb-2">
+                    Date of Birth *
+                </label>
+                <input id="dob" type="date" formControlName="dob"
+                    class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                />
+                <span *ngIf="signupForm.get('dob')?.touched && signupForm.get('dob')?.errors" class="text-xs text-red-500 mt-1 block">
+                    Date of birth is required
+                </span>
+            </div>
+
+            <!-- Registration ID -->
+            <div>
+                <label htmlFor="registration_id" class="block text-sm font-medium text-foreground mb-2">
+                    College Registration ID *
+                </label>
+                <input id="registration_id" type="text" formControlName="registration_id"
+                    class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    placeholder="e.g., REG2024001" />
+                <span *ngIf="signupForm.get('registration_id')?.touched && signupForm.get('registration_id')?.errors" class="text-xs text-red-500 mt-1 block">
+                    Registration ID is required
+                </span>
+            </div>
+
+            <!-- Password -->
+            <div>
+                <label htmlFor="password" class="block text-sm font-medium text-foreground mb-2">
+                    Password *
+                </label>
+                <input id="password" type="password" formControlName="password"
+                    class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    placeholder="••••••••" />
+                <p class="text-xs text-muted-foreground mt-1">Password must be at least 8 characters long</p>
+                <span *ngIf="signupForm.get('password')?.touched && signupForm.get('password')?.errors?.['minlength']" class="text-xs text-red-500 mt-1 block">
+                    Password must be at least 8 characters
+                </span>
+            </div>
+
+            <!-- Confirm Password -->
+            <div>
+                <label htmlFor="confirmPassword" class="block text-sm font-medium text-foreground mb-2">
+                    Confirm Password *
+                </label>
+                <input id="confirmPassword" type="password" formControlName="confirmPassword"
+                    class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    placeholder="••••••••" />
+                <span *ngIf="signupForm.get('confirmPassword')?.touched && signupForm.errors?.['passwordMismatch']" class="text-xs text-red-500 mt-1 block">
+                    Passwords do not match
+                </span>
+            </div>
+
+            <!-- Error Messages -->
+            <div *ngIf="error()" class="p-3 rounded-md bg-destructive/15 text-destructive text-sm flex items-start gap-2">
+                <lucide-icon name="alert-circle" class="h-4 w-4 flex-shrink-0 mt-0.5"></lucide-icon>
+                <span>{{ error() }}</span>
+            </div>
+
+            <!-- Submit Button -->
+            <button type="submit" [disabled]="loading() || signupForm.invalid"
+                class="w-full inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2 mt-6">
+                <lucide-icon *ngIf="loading()" name="loader-2" class="mr-2 h-4 w-4 animate-spin"></lucide-icon>
+                {{ loading() ? 'Submitting...' : 'Submit Request' }}
+            </button>
+        </form>
+
+        <!-- Divider -->
+        <div class="relative">
+            <div class="absolute inset-0 flex items-center">
+                <div class="w-full border-t border-border"></div>
+            </div>
+            <div class="relative flex justify-center text-sm">
+                <span class="px-2 bg-card text-muted-foreground">Already registered?</span>
+            </div>
+        </div>
+
+        <!-- Back to Login -->
+        <button (click)="goBack()" type="button"
+            class="w-full inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-secondary text-secondary-foreground hover:bg-secondary/90 h-10 px-4 py-2">
+            Back to Admin Login
+        </button>
+    </div>
+</div>

@@ -1,0 +1,90 @@
+<div class="max-w-2xl mx-auto space-y-6">
+    <div>
+        <h1 class="font-heading font-bold text-3xl text-foreground">{{ 'ADD_NEW_VEHICLE' | translate }}</h1>
+        <p class="text-sm text-muted-foreground mt-1">{{ 'REGISTER_NEW_VEHICLE_DESC' | translate }}</p>
+    </div>
+
+    <div class="rounded-lg border border-border bg-card p-6 shadow-sm">
+        <form [formGroup]="vehicleForm" (ngSubmit)="onSubmit()" class="space-y-6">
+            <div *ngIf="errorMessage()" class="p-3 bg-red-100 text-red-800 rounded">
+                {{ errorMessage() }}
+            </div>
+            <!-- Vehicle Type -->
+            <div>
+                <label class="block text-sm font-medium text-foreground mb-3">{{ 'VEHICLE_TYPE' | translate }}</label>
+                <div class="grid grid-cols-2 gap-4">
+                    <label
+                        class="relative flex cursor-pointer rounded-lg border bg-background p-4 shadow-sm focus:outline-none"
+                        [class.border-sky-500]="vehicleForm.get('type')?.value === 'bus'"
+                        [class.ring-2]="vehicleForm.get('type')?.value === 'bus'"
+                        [class.ring-sky-500]="vehicleForm.get('type')?.value === 'bus'"
+                        [class.border-border]="vehicleForm.get('type')?.value !== 'bus'">
+                        <input type="radio" formControlName="type" value="bus" class="sr-only">
+                        <span class="flex flex-1">
+                            <span class="flex flex-col">
+                                <span class="block text-sm font-medium text-foreground mb-1">{{ 'BUS' | translate
+                                    }}</span>
+                                <span class="flex items-center text-sm text-muted-foreground">
+                                    <lucide-icon name="bus" class="h-4 w-4 mr-2 text-sky-500"></lucide-icon>
+                                    {{ 'STANDARD_PUBLIC_TRANSPORT' | translate }}
+                                </span>
+                            </span>
+                        </span>
+                        <lucide-icon *ngIf="vehicleForm.get('type')?.value === 'bus'" name="check-circle-2"
+                            class="h-5 w-5 text-sky-500"></lucide-icon>
+                    </label>
+
+                    <label
+                        class="relative flex cursor-pointer rounded-lg border bg-background p-4 shadow-sm focus:outline-none"
+                        [class.border-red-500]="vehicleForm.get('type')?.value === 'ambulance'"
+                        [class.ring-2]="vehicleForm.get('type')?.value === 'ambulance'"
+                        [class.ring-red-500]="vehicleForm.get('type')?.value === 'ambulance'"
+                        [class.border-border]="vehicleForm.get('type')?.value !== 'ambulance'">
+                        <input type="radio" formControlName="type" value="ambulance" class="sr-only">
+                        <span class="flex flex-1">
+                            <span class="flex flex-col">
+                                <span class="block text-sm font-medium text-foreground mb-1">{{ 'AMBULANCE' | translate
+                                    }}</span>
+                                <span class="flex items-center text-sm text-muted-foreground">
+                                    <lucide-icon name="ambulance" class="h-4 w-4 mr-2 text-red-500"></lucide-icon>
+                                    {{ 'EMERGENCY_SERVICES' | translate }}
+                                </span>
+                            </span>
+                        </span>
+                        <lucide-icon *ngIf="vehicleForm.get('type')?.value === 'ambulance'" name="check-circle-2"
+                            class="h-5 w-5 text-red-500"></lucide-icon>
+                    </label>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                <!-- Vehicle Number -->
+                <div class="col-span-2">
+                    <label htmlFor="vehicle_number" class="block text-sm font-medium text-foreground mb-2">
+                        {{ 'VEHICLE_REGISTRATION_NUMBER' | translate }}
+                    </label>
+                    <input type="text" id="vehicle_number" formControlName="vehicle_number" placeholder="WB-04-E-1234"
+                        class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                        [class.border-destructive]="vehicleForm.get('vehicle_number')?.invalid && vehicleForm.get('vehicle_number')?.touched" />
+                    <p *ngIf="vehicleForm.get('vehicle_number')?.invalid && vehicleForm.get('vehicle_number')?.touched"
+                        class="mt-1 text-xs text-destructive">
+                        {{ 'PLEASE_ENTER_VALID_VEHICLE_NUMBER' | translate }}
+                    </p>
+                </div>
+
+            </div>
+
+            <div class="pt-4 flex items-center justify-end gap-4">
+                <button type="button" routerLink="/admin/vehicles"
+                    class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2">
+                    {{ 'CANCEL' | translate }}
+                </button>
+                <button type="submit" [disabled]="loading() || vehicleForm.invalid"
+                    class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground shadow hover:bg-primary/90 h-10 px-4 py-2 min-w-[120px]">
+                    <lucide-icon *ngIf="loading()" name="loader-2" class="mr-2 h-4 w-4 animate-spin"></lucide-icon>
+                    {{ loading() ? ('SAVING' | translate) : ('REGISTER_VEHICLE' | translate) }}
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
