@@ -4,9 +4,11 @@ import { Home, Map, Calendar, Menu, LogOut, AlertCircle, Bell } from 'lucide-rea
 import { useState, useRef, useEffect } from 'react';
 import ThemeToggle from '../shared/components/ThemeToggle';
 import NotificationBell from '../components/NotificationBell';
+import { useBooking } from '../context/BookingContext';
 
 export const StudentLayout = () => {
     const { user, logout } = useAuth();
+    const { activeBooking } = useBooking();
     const navigate = useNavigate();
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const menuRef = useRef(null);

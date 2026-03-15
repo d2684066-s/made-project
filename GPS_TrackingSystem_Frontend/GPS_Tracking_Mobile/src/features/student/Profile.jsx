@@ -63,7 +63,7 @@ const Profile = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background grid-pattern p-4 flex items-center justify-center">
+    <div className="min-h-screen bg-background grid-pattern p-4 flex items-center justify-center overflow-y-auto scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent dark:scrollbar-thumb-slate-700">
       <div className="w-full max-w-md glass rounded-xl p-8">
         <h1 className="font-heading font-bold text-2xl mb-4">My Profile</h1>
         <form onSubmit={handleSubmit} className="space-y-4">

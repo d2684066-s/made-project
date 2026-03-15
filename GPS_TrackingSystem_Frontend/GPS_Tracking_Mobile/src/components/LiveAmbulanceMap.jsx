@@ -127,9 +127,15 @@ const LiveAmbulanceMap = ({ studentLoc, driverLoc, destination, eta, distance, d
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end md:items-center justify-center p-4">
             <div className="bg-white dark:bg-slate-900 rounded-t-3xl md:rounded-3xl w-full md:max-w-2xl max-h-[90vh] overflow-auto border border-slate-200 dark:border-slate-800 shadow-2xl animate-in slide-in-from-bottom-4 duration-300">
                 {/* Header */}
-                <div className="sticky top-0 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 p-4 flex items-center justify-between">
+                <div className="sticky top-0 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 p-4 flex items-center justify-between z-10">
                     <div>
-                        <h3 className="font-bold text-slate-900 dark:text-white">🚑 Live Ambulance Tracking</h3>
+                        <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                            🚑 Live Ambulance Tracking
+                            <span className="inline-flex items-center gap-1 bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 text-[10px] font-bold px-2 py-1 rounded-full">
+                                <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span>
+                                LIVE
+                            </span>
+                        </h3>
                         <p className="text-xs text-slate-500 dark:text-slate-400">Real-time navigation & ETA</p>
                     </div>
                     <button
@@ -148,6 +154,24 @@ const LiveAmbulanceMap = ({ studentLoc, driverLoc, destination, eta, distance, d
 
                 {/* Info Panel */}
                 <div className="p-6 space-y-4">
+                    {/* Real-time Location Status */}
+                    <div className="bg-green-50 dark:bg-green-500/10 p-3 rounded-lg border-2 border-green-500/30 flex items-center gap-2">
+                        <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                        <span className="text-xs font-bold text-green-600 dark:text-green-400 uppercase tracking-wide">📍 Real-Time Location Tracking Active</span>
+                    </div>
+
+                    {/* Your Location & Ambulance Position */}
+                    <div className="grid grid-cols-2 gap-3 text-[10px]">
+                        <div className="bg-blue-50 dark:bg-blue-500/10 p-2 rounded-lg border border-blue-200 dark:border-blue-500/20">
+                            <p className="font-bold text-blue-700 dark:text-blue-400 mb-1">Your Location</p>
+                            <p className="font-mono text-slate-700 dark:text-slate-300">{studentLoc?.lat?.toFixed(4)}, {studentLoc?.lng?.toFixed(4)}</p>
+                        </div>
+                        <div className="bg-red-50 dark:bg-red-500/10 p-2 rounded-lg border border-red-200 dark:border-red-500/20">
+                            <p className="font-bold text-red-700 dark:text-red-400 mb-1">Ambulance Position</p>
+                            <p className="font-mono text-slate-700 dark:text-slate-300">{driverLoc?.lat?.toFixed(4)}, {driverLoc?.lng?.toFixed(4)}</p>
+                        </div>
+                    </div>
+
                     {/* ETA & Distance */}
                     <div className="grid grid-cols-2 gap-4">
                         <div className="bg-blue-50 dark:bg-blue-500/10 p-4 rounded-2xl border border-blue-200 dark:border-blue-500/30">

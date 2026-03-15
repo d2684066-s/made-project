@@ -1,272 +1,379 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { GoogleMap, useLoadScript, Marker } from '@react-google-maps/api';
 import { useAuth } from '../../core/auth.context';
-import { driverApi } from '../../lib/api';
+import { RefreshCw, MapPin } from 'lucide-react';
 import { toast } from 'sonner';
-import NavigationMap from '../../components/NavigationMap';
-import { ArrowLeft, MoreVertical, MapPin, User, Phone, Info, AlertCircle, Play, Square } from 'lucide-react';
+import { publicApi } from '../../lib/api';
+
+const API_URL = 'http://localhost:8000';
+
+const DEFAULT_ZONES = [
+    { name: 'Baitarani Hall of Residency', lat: 21.6363125, lng: 85.61898438, radius: 500 },
+    { name: 'Gandhamardan Hall of Residence', lat: 21.6441625, lng: 85.57992188, radius: 500 },
+    { name: 'Maa Tarini Hall of Residence', lat: 21.6441375, lng: 85.57757813, radius: 500 },
+    { name: 'Baladevjew Hall of Residence', lat: 21.6449125, lng: 85.58048438, radius: 500 },
+    { name: 'Administrative Block', lat: 21.6459469, lng: 85.5802506, radius: 500 },
+];
 
 const ActiveTrip = () => {
-    const navigate = useNavigate();
-    const { token } = useAuth();
-    const [trip, setTrip] = useState(null);
-    const [loading, setLoading] = useState(true);
-    const [showMap, setShowMap] = useState(false);
-    const [driverLocation, setDriverLocation] = useState(null);
+    const { user, token } = useAuth();
+    const [userLocation, setUserLocation] = useState(null);
+    const [refreshing, setRefreshing] = useState(false);
+    const [activeBooking, setActiveBooking] = useState(null);
+    const [zoneMarkers, setZoneMarkers] = useState(DEFAULT_ZONES);
+    const [mapInstance, setMapInstance] = useState(null);
 
-    useEffect(() => {
-        fetchActiveTrip();
-        
-        // Get location immediately
-        updateLocation();
-        
-        // Update location every 10 seconds
-        const interval = setInterval(updateLocation, 10000);
-        
-        return () => clearInterval(interval);
+    // Google Maps configuration
+    const { isLoaded, loadError } = useLoadScript({
+        googleMapsApiKey: process.env.REACT_APP_GOOGLE_MAPS_API_KEY,
+    });
+
+    const mapContainerStyle = {
+        width: '100%',
+        height: '70vh',
+        borderRadius: '16px',
+        WebkitOverflowScrolling: 'touch',
+    };
+
+    const center = useMemo(() => ({
+        lat: 21.641, // Center of Kendujhar area
+        lng: 85.583,
+    }), []);
+
+    const normalizeZones = useCallback((zones) => {
+        if (!Array.isArray(zones)) return [];
+        return zones
+            .map((zone) => ({
+                name: zone?.name || 'Ambulance Zone',
+                lat: Number(zone?.lat),
+                lng: Number(zone?.lng),
+                radius: Number(zone?.radius) || 500,
+            }))
+            .filter((zone) => Number.isFinite(zone.lat) && Number.isFinite(zone.lng));
     }, []);
 
-    const updateLocation = () => {
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(
-                (position) => {
-                    setDriverLocation({
-                        lat: position.coords.latitude,
-                        lng: position.coords.longitude
-                    });
-                },
-                (error) => {
-                    // code: 2 = position temporarily unavailable (weak signal, indoors)
-                    if (error.code === 2) {
-                        // Don't spam console - this is normal when GPS signal weak or indoors
-                        return;
-                    } else if (error.code === 1) {
-                        // Permission denied
-                        console.warn('Geolocation permission denied');
-                    } else {
-                        console.error('Error getting location:', error);
-                    }
-                }
+    // Calculate bounds for a list of zones
+    const getBounds = useCallback((zones) => {
+        const bounds = new window.google.maps.LatLngBounds();
+        zones.forEach((zone) => {
+            bounds.extend({ lat: zone.lat, lng: zone.lng });
+        });
+        return bounds;
+    }, []);
+
+    const visibleZones = useMemo(() => {
+        const allZones = normalizeZones(zoneMarkers);
+        if (!activeBooking) {
+            return allZones;
+        }
+
+        const place = String(activeBooking?.place || activeBooking?.pickup_location || '').toLowerCase().trim();
+        const details = String(activeBooking?.place_details || activeBooking?.pickup_details || '').toLowerCase();
+
+        const matchedZone = allZones.find((zone) => {
+            const zoneName = zone.name.toLowerCase();
+            return (
+                (place && (zoneName === place || zoneName.includes(place) || place.includes(zoneName))) ||
+                (details && details.includes(zoneName))
             );
+        });
+
+        if (matchedZone) {
+            return [matchedZone];
         }
+
+        const bookingLat = Number(activeBooking?.user_location?.lat ?? activeBooking?.user_location?.latitude);
+        const bookingLng = Number(activeBooking?.user_location?.lng ?? activeBooking?.user_location?.longitude);
+
+        if (Number.isFinite(bookingLat) && Number.isFinite(bookingLng)) {
+            return [{
+                name: activeBooking?.place || 'Selected Pickup Location',
+                lat: bookingLat,
+                lng: bookingLng,
+                radius: 500,
+            }];
+        }
+
+        return allZones;
+    }, [activeBooking, normalizeZones, zoneMarkers]);
+
+    // Restrict map to Kendujhar region
+    const mapOptions = {
+        zoomControl: true,
+        streetViewControl: false,
+        mapTypeControl: false,
+        fullscreenControl: true,
+        gestureHandling: 'greedy',
+        restriction: {
+            latLngBounds: {
+                north: 22.20,
+                south: 21.40,
+                east: 86.40,
+                west: 85.30,
+            },
+            strictBounds: true,
+        },
+        styles: [
+            // Hide all points of interest
+            {
+                featureType: 'poi',
+                elementType: 'labels',
+                stylers: [{ visibility: 'off' }],
+            },
+            // Hide business points
+            {
+                featureType: 'poi.business',
+                stylers: [{ visibility: 'off' }],
+            },
+            // Hide transit stations
+            {
+                featureType: 'transit',
+                elementType: 'labels',
+                stylers: [{ visibility: 'off' }],
+            },
+            // Simplify the map to show only roads and our markers
+            {
+                featureType: 'landscape',
+                elementType: 'labels',
+                stylers: [{ visibility: 'off' }],
+            },
+            {
+                featureType: 'administrative',
+                elementType: 'labels',
+                stylers: [{ visibility: 'off' }],
+            },
+        ],
     };
 
-    const fetchActiveTrip = async () => {
-        try {
-            const response = await driverApi.getActiveTrip(token);
-            if (response.data.trip) {
-                setTrip(response.data.trip);
+    // Fit bounds when map loads
+    const onMapLoad = useCallback((mapInstance) => {
+        setMapInstance(mapInstance);
+        if (window.google && window.google.maps) {
+            const zonesToFit = visibleZones.length > 0 ? visibleZones : DEFAULT_ZONES;
+            if (zonesToFit.length > 0) {
+                const bounds = getBounds(zonesToFit);
+                mapInstance.fitBounds(bounds, 80);
+                const listener = window.google.maps.event.addListener(mapInstance, 'idle', () => {
+                    if (mapInstance.getZoom() > 16) {
+                        mapInstance.setZoom(16);
+                    }
+                    window.google.maps.event.removeListener(listener);
+                });
             }
-        } catch (error) {
-            console.error('Error fetching trip:', error);
-        } finally {
-            setLoading(false);
         }
-    };
+    }, [getBounds, visibleZones]);
 
-    const handleEndTrip = async () => {
-        if (!trip) {
-            toast.error('No active trip found');
+    const fetchZones = useCallback(async () => {
+        try {
+            const response = await publicApi.getAmbulanceZones();
+            const data = response?.data || {};
+            const zonesFromApi = normalizeZones(data.zones);
+            setZoneMarkers(zonesFromApi.length > 0 ? zonesFromApi : DEFAULT_ZONES);
+        } catch (error) {
+            console.error('Error fetching ambulance zones:', error);
+            setZoneMarkers(DEFAULT_ZONES);
+        }
+    }, [normalizeZones]);
+
+    const fetchActiveBooking = useCallback(async () => {
+        if (user?.driver_type !== 'ambulance' || !token) {
+            setActiveBooking(null);
             return;
         }
 
         try {
-            // Check if we need to complete a booking first (for ambulance drivers)
-            if (trip.booking_data) {
-                // Complete the booking first
-                await driverApi.completeBooking(trip.booking_data.id, token);
+            const response = await fetch(`${API_URL}/api/driver/current-booking/`, {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+            });
+
+            if (!response.ok) {
+                setActiveBooking(null);
+                return;
             }
 
-            // Then end the trip
-            const response = await driverApi.endTrip(trip.id, token);
-            console.log('End trip response:', response);
-            toast.success("Trip ended successfully");
-            
-            // Navigate back after a short delay
-            setTimeout(() => {
-                navigate('/driver/dashboard');
-            }, 1000);
+            const data = await response.json();
+            setActiveBooking(data?.booking || null);
         } catch (error) {
-            console.error('Failed to end trip:', error);
-            toast.error("Failed to end trip: " + (error.response?.data?.detail || error.message));
+            console.error('Error fetching active booking:', error);
+            setActiveBooking(null);
         }
+    }, [token, user?.driver_type]);
+
+    useEffect(() => {
+        // Get user's current location
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    setUserLocation({
+                        lat: position.coords.latitude,
+                        lng: position.coords.longitude,
+                    });
+                },
+                (error) => {
+                    console.error('Error getting location:', error);
+                    setUserLocation(center);
+                }
+            );
+        } else {
+            setUserLocation(center);
+        }
+
+        fetchZones();
+        fetchActiveBooking();
+    }, [center, fetchActiveBooking, fetchZones]);
+
+    useEffect(() => {
+        if (user?.driver_type !== 'ambulance' || !token) {
+            return;
+        }
+
+        const intervalId = setInterval(() => {
+            fetchActiveBooking();
+        }, 10000);
+
+        return () => clearInterval(intervalId);
+    }, [fetchActiveBooking, token, user?.driver_type]);
+
+    useEffect(() => {
+        if (!mapInstance || !window.google || visibleZones.length === 0) {
+            return;
+        }
+
+        const bounds = getBounds(visibleZones);
+        mapInstance.fitBounds(bounds, 80);
+        if (mapInstance.getZoom() > 16) {
+            mapInstance.setZoom(16);
+        }
+    }, [getBounds, mapInstance, visibleZones]);
+
+    const handleRefresh = async () => {
+        setRefreshing(true);
+        // Refresh user location, zones and active booking
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    setUserLocation({
+                        lat: position.coords.latitude,
+                        lng: position.coords.longitude,
+                    });
+                    setRefreshing(false);
+                    toast.success('Location refreshed');
+                },
+                (error) => {
+                    console.error('Error refreshing location:', error);
+                    setRefreshing(false);
+                    toast.error('Failed to refresh location');
+                }
+            );
+        }
+
+        await Promise.all([fetchZones(), fetchActiveBooking()]);
+        setRefreshing(false);
     };
 
+    if (loadError) {
+        return (
+            <div className="flex items-center justify-center h-64 bg-slate-100 dark:bg-slate-800 rounded-2xl">
+                <div className="text-red-500 text-center">
+                    <div className="text-lg font-semibold">Map Error</div>
+                    <div className="text-sm">Unable to load Google Maps</div>
+                </div>
+            </div>
+        );
+    }
+
+    if (!isLoaded) {
+        return (
+            <div className="flex items-center justify-center h-64 bg-slate-100 dark:bg-slate-800 rounded-2xl">
+                <div className="animate-spin text-[#137fec] mb-4" style={{width: '40px', height: '40px', border: '4px solid #e5e7eb', borderTop: '4px solid #137fec', borderRadius: '50%'}}></div>
+                <p className="text-slate-500 dark:text-slate-400 font-medium animate-pulse text-sm tracking-wide">
+                    Loading ambulance locations...
+                </p>
+            </div>
+        );
+    }
+
     return (
-        <div className="relative flex min-h-screen w-full flex-col bg-[#f6f7f8] dark:bg-[#101922] text-slate-900 dark:text-slate-100 font-sans overflow-x-hidden pb-32 transition-colors duration-300">
-            {/* Top Header */}
-            <header className="flex items-center bg-[#f6f7f8]/80 dark:bg-[#101922]/80 backdrop-blur-md p-4 pb-2 justify-between border-b border-slate-200 dark:border-slate-800 sticky top-0 z-10 transition-colors duration-300">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200 dark:border-slate-800">
+            {/* Header */}
+            <div className="flex items-center justify-between mb-4">
+                <div>
+                    <h2 className="text-xl font-bold text-slate-900 dark:text-white">🚑 Ambulance Service Areas</h2>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">
+                        {activeBooking ? `Active pickup at: ${activeBooking.place || 'Selected location'}` : 'Available pickup locations'}
+                    </p>
+                </div>
                 <button
-                    onClick={() => navigate('/driver/dashboard')}
-                    className="flex h-10 w-10 shrink-0 items-center justify-center hover:text-[#137fec] transition-colors active:scale-95"
-                    title="Go back"
+                    onClick={handleRefresh}
+                    disabled={refreshing}
+                    className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                    title="Refresh Location"
                 >
-                    <ArrowLeft size={20} />
+                    <RefreshCw size={20} className={`text-[#137fec] ${refreshing ? 'animate-spin' : ''}`} />
                 </button>
-                <h2 className="text-lg font-bold leading-tight tracking-tight flex-1 text-center">Active Trip</h2>
-                <button className="hover:bg-slate-200 dark:hover:bg-slate-800 p-2 rounded-full transition-colors active:scale-95" title="More options">
-                    <MoreVertical size={20} className="text-[#137fec]" />
-                </button>
-            </header>
+            </div>
 
-            <main className="flex-1 w-full max-w-md mx-auto">
-                {/* Error/Empty State */}
-                {loading ? (
-                    <div className="p-8 text-center text-slate-500 flex flex-col items-center justify-center min-h-[50vh]">
-                        <div className="h-8 w-8 border-4 border-[#137fec] border-t-transparent rounded-full animate-spin mb-4"></div>
-                        <p className="font-semibold text-lg animate-pulse">Loading trip details...</p>
-                    </div>
-                ) : !trip ? (
-                    <div className="p-8 text-center text-slate-500 flex flex-col items-center justify-center min-h-[50vh] bg-white dark:bg-slate-900/50 m-4 rounded-xl border border-dashed border-slate-300 dark:border-slate-700">
-                        <AlertCircle size={40} className="mb-2 text-slate-400" />
-                        <p className="font-semibold text-lg text-slate-900 dark:text-white">No active trip found</p>
-                        <p className="text-sm mt-1">Start a trip from the dashboard first.</p>
-                        <button
-                            onClick={() => navigate('/driver/dashboard')}
-                            className="mt-6 px-6 py-2 bg-[#137fec] text-white font-bold rounded-lg shadow-md hover:bg-[#137fec]/90 transition-colors"
-                        >
-                            Go to Dashboard
-                        </button>
-                    </div>
-                ) : (
-                    <>
-                        {/* Trip Progress Section */}
-                        <div className="flex flex-col gap-3 p-4 bg-white dark:bg-slate-800/50 m-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 transition-colors duration-300">
-                            <div className="flex gap-6 justify-between items-center">
-                                <p className="text-base font-semibold">Trip Progress</p>
-                                <p className="text-[#137fec] text-sm font-bold">In Progress</p>
-                            </div>
-                            <div className="rounded-full bg-slate-200 dark:bg-slate-700 h-3 overflow-hidden shadow-inner">
-                                <div className="h-full rounded-full bg-gradient-to-r from-[#137fec] to-blue-400 relative" style={{ width: '50%' }}>
-                                    <div className="absolute inset-0 bg-white/20 w-full h-full animate-[shimmer_2s_infinite]"></div>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Logistics Quick Action */}
-                        <div className="px-4 pb-4">
-                            <button 
-                                onClick={() => setShowMap(true)}
-                                className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-[#137fec] hover:bg-blue-600 text-white font-bold rounded-xl border border-blue-400 dark:border-blue-600 shadow-lg shadow-blue-500/20 active:scale-[0.98] transition-all"
-                            >
-                                <MapPin size={18} />
-                                Show Navigation Map
-                            </button>
-                        </div>
-
-                        {/* Map/Location Preview */}
-                        <div className="px-4 pb-4">
-                            <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-slate-200 dark:bg-slate-800 border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-center">
-                                <div className="text-center">
-                                    <MapPin size={40} className="mb-2 text-slate-400 inline-block mx-auto" />
-                                    <p className="text-slate-400 dark:text-slate-500 text-sm font-medium">Map view coming soon</p>
-                                </div>
-                                <div className="absolute bottom-3 left-3 bg-white dark:bg-[#101922] border border-slate-200 dark:border-slate-800 px-3 py-1.5 rounded-full shadow-lg flex items-center gap-2">
-                                    <div className="h-2.5 w-2.5 bg-[#137fec] rounded-full animate-pulse shadow-[0_0_8px_rgba(19,127,236,0.6)]"></div>
-                                    <span className="text-xs font-bold tracking-wide">GPS Active</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Current Pickup Card */}
-                        <h3 className="text-lg font-bold leading-tight tracking-tight px-4 pb-2 pt-2">Next Destination</h3>
-                        <div className="px-4 pb-4">
-                            {trip?.booking_data ? (
-                                <div className="flex flex-col gap-4 rounded-xl bg-white dark:bg-slate-900/80 p-5 shadow-lg shadow-slate-200/50 dark:shadow-none border border-slate-200 dark:border-slate-800 transition-colors duration-300">
-                                    {/* Info Row */}
-                                    <div className="flex items-center gap-4">
-                                        <div className="h-16 w-16 rounded-full bg-slate-200 dark:bg-slate-700 border-2 border-[#137fec] shadow-md flex items-center justify-center">
-                                            <User size={24} className="text-[#137fec]" />
-                                        </div>
-                                        <div className="flex flex-col gap-0.5">
-                                            <h4 className="text-lg font-bold">{trip.booking_data.student_name || 'Student'}</h4>
-                                            <p className="text-[#137fec] text-sm font-semibold">Active Booking</p>
-                                        </div>
-                                        <button 
-                                            onClick={() => {
-                                                if (trip.booking_data.phone) {
-                                                    window.location.href = `tel:${trip.booking_data.phone}`;
-                                                } else {
-                                                    toast.error('Student phone number not available');
-                                                }
-                                            }}
-                                            className="ml-auto h-10 w-10 flex items-center justify-center rounded-full bg-[#137fec]/10 text-[#137fec] hover:bg-[#137fec]/20 active:scale-90 transition-all"
-                                            title="Call Student"
-                                        >
-                                            <Phone size={18} />
-                                        </button>
-                                    </div>
-
-                                    <div className="h-px bg-slate-100 dark:bg-slate-800 w-full"></div>
-
-                                    <div className="flex items-start gap-3">
-                                        <MapPin size={18} className="text-[#137fec] mt-0.5 flex-shrink-0" />
-                                        <div className="flex flex-col">
-                                            <p className="text-slate-500 dark:text-slate-400 text-xs font-medium uppercase tracking-wider">Pickup Location</p>
-                                            <p className="text-base font-bold">{trip.booking_data.pickup_location || 'Location not specified'}</p>
-                                        </div>
-                                    </div>
-
-                                    <div className="flex items-start gap-3">
-                                        <MapPin size={18} className="text-[#137fec] mt-0.5 flex-shrink-0" />
-                                        <div className="flex flex-col">
-                                            <p className="text-slate-500 dark:text-slate-400 text-xs font-medium uppercase tracking-wider">Drop Location</p>
-                                            <p className="text-base font-bold">{trip.booking_data.drop_location || 'Location not specified'}</p>
-                                        </div>
-                                    </div>
-
-                                    {trip.booking_data.notes && (
-                                        <div className="flex items-start gap-3">
-                                            <Info size={18} className="text-[#137fec] mt-0.5 flex-shrink-0" />
-                                            <div className="flex flex-col">
-                                                <p className="text-slate-500 dark:text-slate-400 text-xs font-medium uppercase tracking-wider">Note</p>
-                                                <p className="text-sm font-medium italic text-slate-700 dark:text-slate-300">"{trip.booking_data.notes}"</p>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            ) : (
-                                <div className="text-center py-8 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-dashed border-slate-300 dark:border-slate-700">
-                                    <AlertCircle size={40} className="mb-2 text-slate-400 mx-auto" />
-                                    <p className="font-semibold text-slate-500 dark:text-slate-400">No booking details available</p>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Sticky Bottom Action Buttons */}
-                        <div className="fixed bottom-0 sm:bottom-4 inset-x-0 mx-auto max-w-md p-4 bg-gradient-to-t from-white via-white dark:from-[#101922] dark:via-[#101922] to-transparent z-20 pb-safe">
-                            <div className="flex gap-4">
-                                <button className="flex-1 py-4 px-6 bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-500 font-bold rounded-xl border border-slate-300 dark:border-slate-700 flex items-center justify-center gap-2 cursor-not-allowed">
-                                    <Play size={18} />
-                                    TRIP STARTED
-                                </button>
-                                <button
-                                    onClick={handleEndTrip}
-                                    className="flex-1 py-4 px-6 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-xl shadow-lg shadow-rose-500/20 flex items-center justify-center gap-2 active:scale-95 transition-all"
-                                >
-                                    <Square size={18} />
-                                    END TRIP
-                                </button>
-                            </div>
-                        </div>
-                    </>
+            {/* Map */}
+            <GoogleMap
+                mapContainerStyle={mapContainerStyle}
+                zoom={14}
+                center={userLocation || center}
+                options={mapOptions}
+                onLoad={onMapLoad}
+            >
+                {/* Driver Location */}
+                {userLocation && (
+                    <Marker
+                        position={userLocation}
+                        title="Your Location"
+                        icon={{
+                            url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
+                                <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <circle cx="20" cy="20" r="18" fill="#137fec" stroke="white" stroke-width="3"/>
+                                    <circle cx="20" cy="20" r="8" fill="white"/>
+                                    <text x="20" y="26" text-anchor="middle" fill="#137fec" font-size="12" font-weight="bold">🚑</text>
+                                </svg>
+                            `),
+                            scaledSize: new window.google.maps.Size(40, 40),
+                            anchor: new window.google.maps.Point(20, 40),
+                        }}
+                    />
                 )}
-            </main>
 
-            {/* Show Navigation Map Modal */}
-            {showMap && trip?.booking_data && trip.booking_data.user_location && (
-                <NavigationMap
-                    driverLocation={driverLocation || { lat: 0, lng: 0 }}
-                    patientLocation={trip.booking_data.user_location}
-                    onClose={() => setShowMap(false)}
-                    patient={trip.booking_data}
-                    onCall={() => {
-                        if (trip.booking_data.phone) {
-                            window.location.href = `tel:${trip.booking_data.phone}`;
-                        }
-                    }}
-                />
-            )}
+                {/* Ambulance Locations */}
+                {visibleZones.map((location, index) => (
+                    <Marker
+                        key={`${location.name}-${index}`}
+                        position={{ lat: location.lat, lng: location.lng }}
+                        title={location.name}
+                        icon={{
+                            url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
+                                <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <circle cx="20" cy="20" r="18" fill="#dc2626" stroke="white" stroke-width="3"/>
+                                    <circle cx="20" cy="20" r="8" fill="white"/>
+                                    <text x="20" y="26" text-anchor="middle" fill="#dc2626" font-size="12" font-weight="bold">📍</text>
+                                </svg>
+                            `),
+                            scaledSize: new window.google.maps.Size(40, 40),
+                            anchor: new window.google.maps.Point(20, 40),
+                        }}
+                    />
+                ))}
+            </GoogleMap>
+
+            {/* Location List */}
+            <div className="mt-4 space-y-2">
+                <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-2">Service Locations:</h3>
+                {visibleZones.map((location, index) => (
+                    <div key={`${location.name}-list-${index}`} className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
+                        <MapPin size={16} className="text-red-500" />
+                        <span className="text-sm text-slate-700 dark:text-slate-300">{location.name}</span>
+                    </div>
+                ))}
+            </div>
         </div>
     );
 };

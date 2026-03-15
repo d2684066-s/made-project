@@ -1,0 +1,41 @@
+<div class="p-6">
+  <div class="flex justify-between items-center mb-4">
+    <h1 class="text-3xl font-bold">{{ 'FACULTY' | translate }}</h1>
+    <div class="flex items-center gap-2">
+      <input [(ngModel)]="searchTerm" (change)="search()" type="text" placeholder="{{'SEARCH'|translate}}"
+        class="rounded-md border border-input px-3 py-2 text-sm" />
+      <button (click)="search()" class="p-2 bg-primary text-white rounded"><lucide-icon name="search" class="h-4 w-4"></lucide-icon></button>
+    </div>
+  </div>
+
+  <div class="overflow-x-auto">
+    <table class="w-full border-collapse border border-input">
+      <thead class="bg-muted">
+        <tr>
+          <th class="border border-input p-2 text-left font-medium">{{ 'FACULTY_NAME' | translate }}</th>
+          <th class="border border-input p-2 text-left font-medium">{{ 'EMAIL' | translate }}</th>
+          <th class="border border-input p-2 text-left font-medium">{{ 'FACULTY_ID' | translate }}</th>
+          <th class="border border-input p-2 text-center font-medium">{{ 'ACTIONS' | translate }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let user of faculty()" class="hover:bg-muted/50">
+          <td class="border border-input p-2">{{ user.name }}</td>
+          <td class="border border-input p-2">{{ user.email || '-' }}</td>
+          <td class="border border-input p-2">{{ user.faculty_id }}</td>
+          <td class="border border-input p-2 text-center">
+            <button class="delete-btn" (click)="deleteUser(user.id)">
+              <lucide-icon name="trash-2" class="h-4 w-4"></lucide-icon>
+            </button>
+          </td>
+        </tr>
+        <tr *ngIf="faculty().length === 0">
+          <td colspan="4" class="border border-input p-2 text-center text-muted-foreground">
+            {{ 'NO_RECORDS_FOUND' | translate }}
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div *ngIf="loading()" class="flex justify-center p-4">{{ 'LOADING' | translate }}...</div>
+</div>

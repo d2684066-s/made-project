@@ -3,70 +3,49 @@ import { Clock, MapPin, Loader2, AlertCircle } from 'lucide-react';
 import { publicApi } from '../lib/api';
 
 /**
- * Bus ETA Display Component
- * 
- * Shows estimated time of arrival for bus to Baitarani Hall
- * Updates every 3 minutes
- * 
- * Props:
- * - busId: UUID of the bus vehicle
- * - userLat: Student's current latitude
- * - userLng: Student's current longitude
- * - busNumber: Display name of the bus
+ * Student ETA card powered by /api/public/bus/eta-live/.
+ * Backend response is cached for 3 minutes and polled on same interval.
  */
-export const BusETADisplay = ({ busId, userLat, userLng, busNumber = 'BUS101' }) => {
+export const BusETADisplay = ({ busNumber = 'Campus Bus' }) => {
     const [eta, setEta] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const [lastUpdateTime, setLastUpdateTime] = useState(null);
 
     const fetchETA = useCallback(async () => {
-        if (!busId || !userLat || !userLng) {
-            setError('Missing required location data');
-            return;
-        }
-
         setLoading(true);
         setError(null);
 
         try {
-            const response = await publicApi.getBusETA(busId, userLat, userLng);
-            
+            const response = await publicApi.getBusLiveETA();
             if (response.data) {
-                setEta({
-                    distance: response.data.distance_km,
-                    eta: response.data.eta_minutes,
-                    busLocation: response.data.bus_location,
-                    route: response.data.route || 'GCE Keonjhar → Baitarani Hall of Residence',
-                    method: response.data.method
-                });
+                setEta(response.data);
                 setLastUpdateTime(new Date());
             }
         } catch (err) {
-            console.error('Failed to fetch ETA:', err);
-            setError('Failed to fetch bus ETA. Please try again.');
+            console.error('Failed to fetch live ETA:', err);
+            setError('Failed to fetch live bus ETA. Please try again.');
         } finally {
             setLoading(false);
         }
-    }, [busId, userLat, userLng]);
+    }, []);
 
-    // Initial fetch
     useEffect(() => {
         fetchETA();
-    }, [busId, userLat, userLng, fetchETA]);
+    }, [fetchETA]);
 
-    // Refresh every 3 minutes
     useEffect(() => {
-        const interval = setInterval(fetchETA, 3 * 60 * 1000); // 3 minutes
+        // Poll every 30 seconds so students see real-time status changes.
+        const interval = setInterval(fetchETA, 30 * 1000);
         return () => clearInterval(interval);
-    }, [busId, userLat, userLng, fetchETA]);
+    }, [fetchETA]);
 
     if (loading && !eta) {
         return (
             <div className="bg-white dark:bg-slate-900/50 rounded-2xl p-6 border border-slate-100 dark:border-slate-800 shadow-sm">
                 <div className="flex items-center justify-center gap-3">
                     <Loader2 className="animate-spin text-blue-500" size={20} />
-                    <p className="text-slate-600 dark:text-slate-400">Fetching bus ETA...</p>
+                    <p className="text-slate-600 dark:text-slate-400">Fetching live bus ETA...</p>
                 </div>
             </div>
         );
@@ -89,92 +68,114 @@ export const BusETADisplay = ({ busId, userLat, userLng, busNumber = 'BUS101' })
     if (!eta) {
         return (
             <div className="bg-slate-100 dark:bg-slate-800 rounded-2xl p-6 border border-slate-200 dark:border-slate-700 text-center">
-                <p className="text-slate-600 dark:text-slate-400">Bus information unavailable</p>
+                <p className="text-slate-600 dark:text-slate-400">Bus ETA unavailable</p>
             </div>
         );
     }
 
-    const formatTime = (minutes) => {
-        if (!minutes || minutes === null) return '—';
-        if (minutes < 1) return 'Arriving now';
-        if (minutes < 2) return '< 2 min';
-        return `${Math.round(minutes)} min`;
-    };
+    const isActive = eta.status === 'ACTIVE' && eta.eta_minutes !== null;
+    const isStarted = eta.status === 'STARTED';
+    const isOutOfStation = eta.status === 'OUT_OF_STATION';
+    const isNotStarted = eta.status === 'NOT_STARTED';
+    const etaMinutes = isActive ? Math.max(1, Math.round(Number(eta.eta_minutes))) : null;
 
-    const getETAStatus = (minutes) => {
-        if (!minutes) return { color: 'gray', label: 'Unknown' };
-        if (minutes < 2) return { color: 'green', label: 'Almost here' };
-        if (minutes < 5) return { color: 'yellow', label: 'Coming soon' };
-        return { color: 'blue', label: 'On the way' };
-    };
+    if (!isActive) {
+        const cardClass = isOutOfStation
+            ? 'bg-amber-50 dark:bg-amber-950/20 border-amber-300 dark:border-amber-800 text-amber-800 dark:text-amber-200'
+            : isStarted
+            ? 'bg-blue-50 dark:bg-blue-950/20 border-blue-300 dark:border-blue-800 text-blue-800 dark:text-blue-200'
+            : 'bg-slate-50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400';
 
-    const status = getETAStatus(eta.eta);
-    const colorClasses = {
-        green: 'bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800 text-green-700 dark:text-green-300',
-        yellow: 'bg-yellow-50 dark:bg-yellow-950/30 border-yellow-200 dark:border-yellow-800 text-yellow-700 dark:text-yellow-300',
-        blue: 'bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300',
-        gray: 'bg-slate-50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
-    };
+        return (
+            <div className={`rounded-2xl p-6 border shadow-sm ${cardClass}`}>
+                <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                        <Clock size={18} />
+                        <p className="font-semibold text-base">Bus ETA Status</p>
+                    </div>
+                    {loading && <Loader2 className="animate-spin opacity-50" size={18} />}
+                </div>
+
+                {isNotStarted && (
+                    <p className="text-sm font-medium">No bus trip running right now.</p>
+                )}
+                {isStarted && (
+                    <>
+                        <p className="text-sm font-medium">Bus trip is active.</p>
+                        <p className="text-xs mt-1 font-semibold opacity-80">
+                            Waiting for live GPS — ETA will appear shortly.
+                        </p>
+                    </>
+                )}
+                {isOutOfStation && (
+                    <>
+                        <p className="text-sm font-medium">Bus is out of station.</p>
+                        <p className="text-xs mt-1 font-semibold">
+                            ETA is unavailable until the bus returns to station.
+                        </p>
+                    </>
+                )}
+                {!isNotStarted && !isStarted && !isOutOfStation && (
+                    <p className="text-sm font-medium">{eta.message || 'No bus trip running right now.'}</p>
+                )}
+
+                {lastUpdateTime && (
+                    <div className="text-xs opacity-60 mt-3">
+                        Last updated: {lastUpdateTime.toLocaleTimeString()}
+                    </div>
+                )}
+
+                <button
+                    onClick={fetchETA}
+                    disabled={loading}
+                    className="w-full mt-3 py-2 px-3 rounded-lg bg-white/50 dark:bg-slate-800 hover:bg-white/70 dark:hover:bg-slate-700 disabled:opacity-50 transition-all text-sm font-semibold uppercase tracking-wider"
+                >
+                    {loading ? 'Updating...' : 'Refresh'}
+                </button>
+            </div>
+        );
+    }
 
     return (
-        <div className={`rounded-2xl p-6 border shadow-sm ${colorClasses[status.color]}`}>
-            {/* Header */}
+        <div className="rounded-2xl p-6 border shadow-sm bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300">
             <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
-                    <div className={`p-2 rounded-lg`}>
-                        <Clock size={18} />
-                    </div>
+                    <Clock size={18} />
                     <div>
-                        <p className="text-xs font-bold uppercase tracking-wider opacity-75">ETA Status</p>
-                        <p className="font-semibold text-base">{status.label}</p>
+                        <p className="text-xs font-bold uppercase tracking-wider opacity-75">Live ETA</p>
+                        <p className="font-semibold text-base">{eta.bus_number || busNumber}</p>
                     </div>
                 </div>
-                {loading && (
-                    <Loader2 className="animate-spin opacity-50" size={18} />
-                )}
+                {loading && <Loader2 className="animate-spin opacity-50" size={18} />}
             </div>
 
-            {/* Main ETA Display */}
-            <div className="mb-4 p-4 bg-white/50 dark:bg-slate-900/50 rounded-xl">
-                <div className="text-center">
-                    <p className="text-xs font-bold uppercase tracking-widest opacity-50 mb-1">Arrival Time</p>
-                    <p className="text-4xl font-black">{formatTime(eta.eta)}</p>
-                </div>
+            <div className="mb-4 p-4 bg-white/50 dark:bg-slate-900/50 rounded-xl text-center">
+                <p className="text-xs font-bold uppercase tracking-widest opacity-50 mb-1">Arrival Update</p>
+                <p className="text-2xl font-black">Bus arriving in {etaMinutes} minutes</p>
             </div>
 
-            {/* Distance */}
-            <div className="flex items-center gap-3 mb-4 p-3 bg-white/50 dark:bg-slate-900/50 rounded-lg">
+            <div className="flex items-center gap-3 mb-3 p-3 bg-white/50 dark:bg-slate-900/50 rounded-lg">
                 <MapPin size={16} className="opacity-75" />
                 <div className="flex-1">
-                    <p className="text-xs opacity-75">Distance</p>
-                    <p className="font-semibold">{eta.distance} km</p>
+                    <p className="text-xs opacity-75">Destination</p>
+                    <p className="font-semibold">{eta.destination || 'Baitarani Hall of Residence'}</p>
                 </div>
             </div>
 
-            {/* Bus Info */}
-            <div className="mb-4 p-3 bg-white/50 dark:bg-slate-900/50 rounded-lg">
-                <p className="text-xs opacity-75 mb-1">Bus</p>
-                <p className="font-bold text-sm">{busNumber}</p>
-            </div>
+            {typeof eta.distance_km === 'number' && (
+                <div className="text-sm opacity-90 mb-2">Distance: {eta.distance_km} km</div>
+            )}
 
-            {/* Route Info */}
-            <div className="mb-3 p-3 bg-white/50 dark:bg-slate-900/50 rounded-lg">
-                <p className="text-xs opacity-75 mb-1">Route</p>
-                <p className="text-sm font-medium">{eta.route}</p>
-            </div>
-
-            {/* Last Update Time */}
             {lastUpdateTime && (
-                <div className="text-xs opacity-50 mt-3">
+                <div className="text-xs opacity-60 mt-2">
                     Last updated: {lastUpdateTime.toLocaleTimeString()}
                 </div>
             )}
 
-            {/* Refresh Button */}
             <button
                 onClick={fetchETA}
                 disabled={loading}
-                className="w-full mt-3 py-2 px-3 rounded-lg bg-white/20 hover:bg-white/30 disabled:opacity-50 transition-all text-sm font-semibold uppercase tracking-wider"
+                className="w-full mt-3 py-2 px-3 rounded-lg bg-white/30 hover:bg-white/50 disabled:opacity-50 transition-all text-sm font-semibold uppercase tracking-wider"
             >
                 {loading ? 'Updating...' : 'Refresh'}
             </button>

@@ -38,6 +38,18 @@ class UserCreateSerializer(serializers.ModelSerializer):
             'driver_type'
         ]
 
+    def validate(self, data):
+        role = data.get("role")
+        email = data.get("email")
+
+        if role == "student":
+            if not email or not str(email).strip().endswith("@gcekjr.ac.in"):
+                raise serializers.ValidationError({
+                    "email": "Student must register using official @gcekjr.ac.in email"
+                })
+
+        return data
+
     def create(self, validated_data):
         validated_data['password'] = make_password(validated_data['password'])
         return super().create(validated_data)

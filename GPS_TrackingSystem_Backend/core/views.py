@@ -5,6 +5,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.contrib.auth.hashers import check_password, make_password
 from django.db.models import Q 
 from django.utils import timezone
+from django.core.cache import cache
 import logging
 
 from .models import User, PendingAdmin, Vehicle, Booking, Offence, RFIDDevice, Trip, Issue
@@ -24,6 +25,7 @@ from .utils import (
 )
 from .permissions import IsAdmin, IsDriver
 from rest_framework_simplejwt.tokens import RefreshToken
+from tracking.services.eta_engine import calculate_live_eta, LIVE_ETA_CACHE_KEY
 
 logger = logging.getLogger(__name__)
 
@@ -186,6 +188,7 @@ class CreateApprovedAdminView(APIView):
 
 # User Login Api
 class LoginView(APIView):
+    authentication_classes = []
     permission_classes = [AllowAny]
 
     def post(self, request):
@@ -452,6 +455,17 @@ class StartTripView(APIView):
             is_active=True
         )
 
+        if vehicle.vehicle_type == 'bus':
+            now_iso = timezone.now().isoformat()
+            location = vehicle.current_location or {}
+            location['bus_active'] = True
+            location['driver_active'] = True
+            location['trip_status'] = 'ACTIVE'
+            location['trip_started_at'] = now_iso
+            vehicle.current_location = location
+            vehicle.save(update_fields=['current_location'])
+            cache.delete(LIVE_ETA_CACHE_KEY)
+
         return Response(TripSerializer(trip).data, status=201)
 
 
@@ -468,9 +482,18 @@ class EndTripView(APIView):
         trip.end_time = timezone.now()
         trip.save()
 
-        # Optional: clear current location
-        trip.vehicle.current_location = {}
-        trip.vehicle.save()
+        if trip.vehicle.vehicle_type == 'bus':
+            now_iso = timezone.now().isoformat()
+            location = trip.vehicle.current_location or {}
+            location['bus_active'] = False
+            location['driver_active'] = False
+            location['trip_status'] = 'ENDED'
+            location['trip_ended_at'] = now_iso
+            location['timestamp'] = now_iso
+            location['packet_timestamp'] = now_iso
+            trip.vehicle.current_location = location
+            trip.vehicle.save(update_fields=['current_location'])
+            cache.delete(LIVE_ETA_CACHE_KEY)
 
         return Response({"message": "Trip ended successfully"})
 
@@ -479,20 +502,47 @@ class MarkOutOfStationView(APIView):
     permission_classes = [IsDriver]
 
     def post(self, request, vehicle_id):
-        is_out = request.data.get('is_out_of_station')
-        if is_out is None:
+        is_out_raw = request.data.get('is_out_of_station')
+        if is_out_raw is None:
             return Response({"detail": "is_out_of_station (bool) required"}, status=400)
+
+        if isinstance(is_out_raw, bool):
+            is_out = is_out_raw
+        elif isinstance(is_out_raw, str):
+            normalized = is_out_raw.strip().lower()
+            if normalized in {'true', '1', 'yes', 'on'}:
+                is_out = True
+            elif normalized in {'false', '0', 'no', 'off'}:
+                is_out = False
+            else:
+                return Response({"detail": "is_out_of_station must be true/false"}, status=400)
+        elif isinstance(is_out_raw, (int, float)):
+            is_out = bool(is_out_raw)
+        else:
+            return Response({"detail": "is_out_of_station must be true/false"}, status=400)
 
         try:
             vehicle = Vehicle.objects.get(id=vehicle_id, assigned_to=request.user)
         except Vehicle.DoesNotExist:
             return Response({"detail": "Vehicle not found or not yours"}, status=404)
 
-        vehicle.is_out_of_station = bool(is_out)
-        vehicle.save()
+        vehicle.is_out_of_station = is_out
+
+        if vehicle.vehicle_type == 'bus':
+            location = vehicle.current_location or {}
+            location['is_out_of_station'] = is_out
+            vehicle.current_location = location
+            vehicle.save(update_fields=['is_out_of_station', 'current_location'])
+            cache.delete(LIVE_ETA_CACHE_KEY)
+        else:
+            vehicle.save(update_fields=['is_out_of_station'])
 
         status_str = "out of" if is_out else "in"
-        return Response({"message": f"Vehicle marked as {status_str} station"})
+        return Response({
+            "message": f"Vehicle marked as {status_str} station",
+            "vehicle_id": str(vehicle.id),
+            "is_out_of_station": is_out,
+        })
 
 
 class PendingBookingsView(APIView):
@@ -849,6 +899,30 @@ class DeleteDriverView(APIView):
         return Response({"message": "Driver deleted"})
 
 
+class DeleteUserView(APIView):
+    permission_classes = [IsAdmin]
+
+    def delete(self, request, user_id):
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({"detail": "User not found"}, status=404)
+
+        if user.is_superuser:
+            return Response({"detail": "Superuser cannot be deleted"}, status=400)
+
+        if str(request.user.id) == str(user.id):
+            return Response({"detail": "You cannot delete your own account"}, status=400)
+
+        if user.role == 'driver':
+            Vehicle.objects.filter(assigned_to__id=user_id).update(
+                assigned_to=None, assigned_driver_name=None
+            )
+
+        user.delete()
+        return Response({"message": "User deleted successfully"})
+
+
 class AdminListView(APIView):
     permission_classes = [IsAuthenticated]  # Allow authenticated users to view admins
 
@@ -1105,16 +1179,24 @@ class ActiveBusesView(APIView):
 
     def get(self, request):
         # Use vehicle_type from Trip (denormalized field) to avoid JOIN
-        active_trips = Trip.objects.filter(is_active=True, vehicle_type="bus")
+        active_trips = Trip.objects.filter(
+            is_active=True,
+            vehicle_type="bus"
+        ).select_related('vehicle')
 
         if active_trips.exists():
             buses = []
+            total_active_bus_trips = 0
+            out_of_station_active_bus_trips = 0
             for trip in active_trips:
                 vehicle = trip.vehicle
-                # Reset out-of-station flag if active trip exists
+                total_active_bus_trips += 1
+
+                # Out-of-station buses should not be shown as live/trackable.
                 if vehicle.is_out_of_station:
-                    vehicle.is_out_of_station = False
-                    vehicle.save()
+                    out_of_station_active_bus_trips += 1
+                    continue
+
                 buses.append({
                     "trip_id": str(trip.id),
                     "vehicle_id": str(vehicle.id),
@@ -1123,6 +1205,18 @@ class ActiveBusesView(APIView):
                     "location": vehicle.current_location,
                     "is_out_of_station": False
                 })
+
+            all_out = (
+                total_active_bus_trips > 0 and
+                out_of_station_active_bus_trips == total_active_bus_trips
+            )
+            if all_out:
+                return Response({
+                    "message": "All active buses are out of station",
+                    "buses": [],
+                    "all_out_of_station": True,
+                })
+
             return Response({"buses": buses, "all_out_of_station": False})
 
         # No active trips → check all buses
@@ -1161,6 +1255,20 @@ class PublicActiveVehiclesView(APIView):
                 })
 
         return Response({"vehicles": vehicles})
+
+class AmbulanceZonesView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        from geofence.kendujhar_zone import AMBULANCE_SERVICE_ZONES
+        ambulance_active = Trip.objects.filter(
+            is_active=True,
+            vehicle_type='ambulance'
+        ).exists()
+        return Response({
+            "zones": AMBULANCE_SERVICE_ZONES,
+            "ambulance_active": ambulance_active
+        })
 
 class BusETAView(APIView):
     """
@@ -1244,6 +1352,14 @@ class BusETAView(APIView):
             "message": "Using Google Distance Matrix API",
             "method": "google_distance_matrix"
         })
+
+
+class BusLiveETAView(APIView):
+    """Return cached live ETA for the active bus to Baitarani Hall."""
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        return Response(calculate_live_eta(), status=200)
 
 
 class AvailableAmbulancesView(APIView):
@@ -1365,7 +1481,7 @@ class UpdateVehicleLocationView(APIView):
     Update vehicle location from mobile driver app.
     
     This endpoint is called by the driver mobile app when tracking a bus/ambulance.
-    The driver's phone GPS sends location updates every 5 seconds.
+    The driver's phone GPS sends location updates every 10 seconds.
     
     Request body:
     {
@@ -1385,34 +1501,74 @@ class UpdateVehicleLocationView(APIView):
         speed = request.data.get('speed', 0)
         timestamp = request.data.get('timestamp')
         
-        if not all([vehicle_id, lat, lng]):
+        if lat is None or lng is None:
             return Response({
-                "detail": "vehicle_id, lat, and lng are required"
+                "detail": "lat and lng are required"
+            }, status=400)
+
+        # Prefer explicit vehicle_id from client; if absent, infer from active trip.
+        vehicle = None
+        if vehicle_id:
+            try:
+                vehicle = Vehicle.objects.get(id=vehicle_id)
+            except Vehicle.DoesNotExist:
+                return Response({
+                    "detail": "Vehicle not found"
+                }, status=404)
+        elif request.user and request.user.is_authenticated:
+            active_trip = Trip.objects.filter(
+                driver=request.user,
+                is_active=True
+            ).select_related('vehicle').first()
+            if active_trip:
+                vehicle = active_trip.vehicle
+
+        if not vehicle:
+            return Response({
+                "detail": "vehicle_id required when no active driver trip is found"
             }, status=400)
         
-        try:
-            vehicle = Vehicle.objects.get(id=vehicle_id)
-        except Vehicle.DoesNotExist:
-            return Response({
-                "detail": "Vehicle not found"
-            }, status=404)
+        # Geofence check
+        from geofence.utils import is_inside_kendujhar
+        if not is_inside_kendujhar(float(lat), float(lng)):
+            return Response(
+                {
+                    "error": "Vehicle outside Kendujhar permitted zone",
+                    "code": "OUTSIDE_KEONJHAR",
+                },
+                status=400
+            )
         
-        # Update location
+        speed_value = float(speed) if speed not in (None, '') else 0.0
+        packet_timestamp = timestamp or timezone.now().isoformat()
+        is_bus_vehicle = vehicle.vehicle_type == 'bus'
+        active_trip_exists = Trip.objects.filter(vehicle=vehicle, is_active=True).exists() if is_bus_vehicle else True
+        bus_active = active_trip_exists if is_bus_vehicle else None
+
+        # Store latest GPS packet and packet health fields in location JSON.
         location = {
             "lat": float(lat),
             "lng": float(lng),
-            "speed": float(speed) if speed else 0,
-            "timestamp": timestamp or timezone.now().isoformat()
+            "speed": speed_value,
+            "timestamp": packet_timestamp,
+            "packet_timestamp": packet_timestamp,
+            "server_received_at": timezone.now().isoformat(),
+            "driver_active": active_trip_exists if is_bus_vehicle else True,
         }
+        if is_bus_vehicle:
+            location['bus_active'] = bus_active
         
         vehicle.current_location = location
         vehicle.save()
+
+        if is_bus_vehicle:
+            cache.delete(LIVE_ETA_CACHE_KEY)
         
         # Log for debugging
         logger.info(f"Updated location for {vehicle.vehicle_number}: {lat}, {lng}")
         
         # Check overspeed for bus
-        if vehicle.vehicle_type == 'bus' and float(speed) > 40:
+        if vehicle.vehicle_type == 'bus' and speed_value > 40:
             driver_name = vehicle.assigned_driver_name or "Unknown"
             offence = Offence.objects.create(
                 offence_type='bus_overspeed',
@@ -1420,17 +1576,19 @@ class UpdateVehicleLocationView(APIView):
                 driver_name=driver_name,
                 vehicle=vehicle,
                 vehicle_number=vehicle.vehicle_number,
-                speed=float(speed),
+                speed=speed_value,
                 speed_limit=40,
                 location=location,
                 is_paid=False
             )
-            logger.warning(f"Overspeed: {vehicle.vehicle_number} @ {speed} km/h")
+            logger.warning(f"Overspeed: {vehicle.vehicle_number} @ {speed_value} km/h")
         
         return Response({
             "message": "Location updated successfully",
             "vehicle_id": str(vehicle.id),
             "vehicle_number": vehicle.vehicle_number,
+            "driver_active": active_trip_exists,
+            "bus_active": bus_active,
             "location": location
         })
 

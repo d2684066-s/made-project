@@ -34,6 +34,8 @@ const BookAmbulance = () => {
     const [showLocationPicker, setShowLocationPicker] = useState(false);
     const [selectedLocationData, setSelectedLocationData] = useState(null);
     const [locationValidationError, setLocationValidationError] = useState(null);
+    const [isRealTimeTracking, setIsRealTimeTracking] = useState(false);
+    const [lastLocationUpdate, setLastLocationUpdate] = useState(null);
 
     const places = [
         'BAITARANI HALL OF RESIDENCE',
@@ -50,8 +52,9 @@ const BookAmbulance = () => {
                 const location = await getUserLocation();
                 setUserCoords(location);
             } catch (err) {
-                console.error('Failed to get location:', err);
-                toast.error('Could not access your location');
+                console.warn('Location service error (expected in dev):', err.message);
+                // Use default location for Keonjhar
+                setUserCoords({ lat: 20.2441, lng: 85.8337 });
             }
         };
         getLocation();
@@ -205,8 +208,11 @@ const BookAmbulance = () => {
             });
 
             // Start watching location for real-time updates
+            setIsRealTimeTracking(true);
             const id = watchUserLocation((location) => {
                 setUserCoords(location);
+                setLastLocationUpdate(new Date().toLocaleTimeString());
+                console.log('📍 Real-time location update:', location);
             });
             setWatchId(id);
 
@@ -327,7 +333,7 @@ const BookAmbulance = () => {
     };
 
     return (
-        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 pb-12">
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 pb-12 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent dark:scrollbar-thumb-slate-700 min-h-screen">
             {/* Header */}
             <div className="flex items-center gap-4 mb-8">
                 <button
@@ -481,9 +487,48 @@ const BookAmbulance = () => {
                 )}
 
                 {/* Booking Status Display */}
+                {bookingStatus === 'waiting' && (
+                    <div className="bg-yellow-50 dark:bg-yellow-500/10 border border-yellow-500/30 p-6 rounded-2xl space-y-4">
+                        <p className="text-sm font-bold text-yellow-900 dark:text-yellow-200 mb-4">⏳ Waiting for Driver Acceptance</p>
+
+                        {/* Real-time Location Status */}
+                        <div className="bg-white dark:bg-slate-900/50 p-4 rounded-xl border-2 border-blue-500/30 flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="animate-pulse">
+                                    <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                                </div>
+                                <div>
+                                    <p className="text-xs font-bold text-green-600 dark:text-green-400 uppercase tracking-wide">📍 Real-Time Location</p>
+                                    <p className="text-[10px] text-slate-500 dark:text-slate-400">Active & Updating</p>
+                                </div>
+                            </div>
+                            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400">{lastLocationUpdate}</span>
+                        </div>
+
+                        <div className="space-y-3">
+                            {/* Coordinates Display */}
+                            <div className="bg-slate-50 dark:bg-slate-800/30 p-3 rounded-lg">
+                                <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Current Location</p>
+                                <p className="text-sm font-mono text-slate-900 dark:text-white">
+                                    {userCoords.lat ? `${userCoords.lat.toFixed(5)}, ${userCoords.lng.toFixed(5)}` : 'Fetching...'}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Booking Status Display - Accepted */}
                 {bookingStatus === 'accepted' && driverInfo && (
                     <div className="bg-green-50 dark:bg-green-500/10 border border-green-500/30 p-6 rounded-2xl space-y-4">
                         <p className="text-sm font-bold text-green-900 dark:text-green-200 mb-4">✓ Driver Accepted - Ambulance On the Way</p>
+
+                        {/* Real-time Location Status Badge */}
+                        {isRealTimeTracking && (
+                            <div className="bg-white dark:bg-slate-900/50 p-3 rounded-lg border-2 border-green-500/30 flex items-center gap-2 animate-in fade-in duration-300">
+                                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                                <span className="text-xs font-bold text-green-600 dark:text-green-400 uppercase tracking-wide">📍 Live Location: {lastLocationUpdate}</span>
+                            </div>
+                        )}
 
                         <div className="space-y-3">
                             <div className="flex items-center justify-between p-3 bg-white dark:bg-slate-900 rounded-lg">

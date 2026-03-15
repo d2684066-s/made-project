@@ -74,7 +74,7 @@ const VehicleAssignment = () => {
     };
 
     return (
-        <div className="bg-[#f6f7f8] dark:bg-[#101922] text-slate-900 dark:text-slate-100 min-h-screen flex flex-col font-sans transition-colors duration-300">
+        <div className="bg-[#f6f7f8] dark:bg-[#101922] text-slate-900 dark:text-slate-100 min-h-screen flex flex-col font-sans overflow-y-auto scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent dark:scrollbar-thumb-slate-700 transition-colors duration-300">
             {/* Header */}
             <header className="sticky top-0 z-10 bg-[#f6f7f8]/80 dark:bg-[#101922]/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
                 <div className="flex items-center justify-between px-4 py-4 max-w-md mx-auto w-full">

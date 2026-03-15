@@ -12,6 +12,17 @@ const PendingRequests = () => {
     const [requests, setRequests] = useState([]);
     const [loading, setLoading] = useState(true);
 
+    const cachePendingRequests = (requestsList = []) => {
+        const ids = requestsList.map((req) => req.id);
+        localStorage.setItem('gce_pending_request_count', String(ids.length));
+        localStorage.setItem('gce_pending_request_ids', JSON.stringify(ids));
+
+        // Let the layout update immediately when requests change (especially useful on mobile)
+        window.dispatchEvent(new CustomEvent('pendingRequestsUpdated', {
+            detail: { count: ids.length }
+        }));
+    };
+
     useEffect(() => {
         fetchRequests();
     }, []);
@@ -20,12 +31,19 @@ const PendingRequests = () => {
         setLoading(true);
         try {
             const response = await driverApi.getPendingBookings(token);
-            setRequests(response.data.bookings || []);
+            const newRequests = response.data.bookings || [];
+            setRequests(newRequests);
+            cachePendingRequests(newRequests);
         } catch (error) {
             console.error('Failed to fetch pending requests:', error);
             toast.error('Connection Error', {
                 description: 'Could not load the request queue.'
             });
+            // Use cached count when offline
+            const cachedCount = Number(localStorage.getItem('gce_pending_request_count') || 0);
+            if (cachedCount > 0) {
+                toast.info(`Showing ${cachedCount} cached request(s).`, { duration: 4000 });
+            }
         } finally {
             setLoading(false);
         }
@@ -37,7 +55,11 @@ const PendingRequests = () => {
             toast.success('Mission Accepted', {
                 description: 'Redirecting to navigation...'
             });
-            setRequests(requests.filter(req => req.id !== id));
+            setRequests((prev) => {
+                const updated = prev.filter((req) => req.id !== id);
+                cachePendingRequests(updated);
+                return updated;
+            });
             setTimeout(() => navigate('/driver/active-trip'), 500);
         } catch (error) {
             console.error('Accept booking error details:', error.response?.data);
@@ -54,7 +76,11 @@ const PendingRequests = () => {
             toast.info('Request Declined', {
                 description: 'The request has been removed from your queue.'
             });
-            setRequests(requests.filter(req => req.id !== id));
+            setRequests((prev) => {
+                const updated = prev.filter((req) => req.id !== id);
+                cachePendingRequests(updated);
+                return updated;
+            });
         } catch (error) {
             toast.error('Operation Failed', {
                 description: 'Failed to decline the booking.'
@@ -63,7 +89,7 @@ const PendingRequests = () => {
     };
 
     return (
-        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent dark:scrollbar-thumb-slate-700 min-h-screen">
             {/* Header / Nav */}
             <div className="flex items-center gap-4 mb-8">
                 <button

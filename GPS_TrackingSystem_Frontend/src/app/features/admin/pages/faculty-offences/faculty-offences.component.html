@@ -1,11 +1,34 @@
 <div class="p-6">
     <div class="flex justify-between items-center mb-6">
         <h1 class="text-3xl font-bold">{{ 'FACULTY_OFFENCES' | translate }}</h1>
-        <button (click)="openForm()"
-            class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground shadow hover:bg-primary/90 h-10 px-4 py-2">
-            <lucide-icon name="plus" class="mr-2 h-4 w-4"></lucide-icon>
-            {{ 'ADD_OFFENCE' | translate }}
-        </button>
+        <div class="flex items-center gap-2">
+            <button (click)="toggleSearchPanel()"
+                class="inline-flex items-center justify-center rounded-md border border-input bg-background hover:bg-accent h-10 w-10"
+                title="Search by registration number">
+                <lucide-icon name="search" class="h-4 w-4"></lucide-icon>
+            </button>
+
+            <button (click)="openAddFacultyModal()"
+                class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors bg-sky-600 text-white shadow hover:bg-sky-700 h-10 px-4 py-2">
+                <lucide-icon name="user-plus" class="mr-2 h-4 w-4"></lucide-icon>
+                ADD FACULTY
+            </button>
+
+            <button (click)="openForm()"
+                class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground shadow hover:bg-primary/90 h-10 px-4 py-2">
+                <lucide-icon name="plus" class="mr-2 h-4 w-4"></lucide-icon>
+                {{ 'ADD_OFFENCE' | translate }}
+            </button>
+        </div>
+    </div>
+
+    <div *ngIf="showSearchPanel()" class="mb-6 flex justify-end">
+        <div class="search-panel">
+            <input [(ngModel)]="facultySearchRegistration" type="text" placeholder="Search by registration number"
+                class="search-input">
+            <button (click)="searchByRegistration()" class="search-btn">Search</button>
+            <button (click)="resetSearch()" class="secondary-btn">Reset</button>
+        </div>
     </div>
 
     <!-- Create/Edit Form -->
@@ -87,7 +110,7 @@
                 <tr *ngFor="let offence of offences()" class="hover:bg-muted/50">
                     <td class="border border-input p-3">{{ offence.faculty_id }}</td>
                     <td class="border border-input p-3">{{ offence.faculty_name }}</td>
-                    <td class="border border-input p-3">{{ offence.violation_type }}</td>
+                    <td class="border border-input p-3">{{ offence.violation?.violation_type || offence.violation_type || '-' }}</td>
                     <td class="border border-input p-3">
                         <span [class]="'px-2 py-1 rounded text-xs font-medium ' + getSeverityClass(offence.severity)">
                             {{ offence.severity }}
@@ -99,13 +122,15 @@
                         <span *ngIf="!offence.is_paid" class="text-red-600 font-medium">{{ 'UNPAID' | translate }}</span>
                     </td>
                     <td class="border border-input p-3 text-center flex gap-2 justify-center">
-                        <button *ngIf="!offence.is_paid" (click)="markAsPaid(offence)"
+                        <button *ngIf="!offence.is_paid" (click)="openMarkPaidModal(offence)"
                             class="text-xs px-2 py-1 rounded bg-green-600 text-white hover:bg-green-700">
                             {{ 'MARK_PAID' | translate }}
                         </button>
-                        <button (click)="deleteOffence(offence.id)"
-                            class="text-xs px-2 py-1 rounded bg-red-600 text-white hover:bg-red-700">
-                            <lucide-icon name="trash-2" class="h-4 w-4"></lucide-icon>
+                        <button *ngIf="offence.is_paid" (click)="viewReceipt(offence)"
+                            [disabled]="!offence.receipt_pdf_url"
+                            class="icon-btn"
+                            title="View uploaded receipt">
+                            <lucide-icon name="eye" class="h-4 w-4"></lucide-icon>
                         </button>
                     </td>
                 </tr>
@@ -116,6 +141,82 @@
                 </tr>
             </tbody>
         </table>
+    </div>
+
+    <div *ngIf="showMarkPaidModal()" class="fixed inset-0 z-50 flex items-center justify-center px-4">
+        <div class="absolute inset-0 bg-black/50" (click)="closeMarkPaidModal()"></div>
+
+        <div class="relative w-full max-w-lg rounded-lg bg-white p-6 shadow-2xl">
+            <h3 class="text-lg font-semibold mb-2">Upload Payment Receipt (PDF)</h3>
+            <p class="text-sm text-gray-600 mb-4">Drag and drop a PDF receipt, then click Paid.</p>
+
+            <div class="receipt-drop-zone" [class.drag-over]="isDragOver()"
+                (dragover)="onDragOver($event)"
+                (dragleave)="onDragLeave($event)"
+                (drop)="onDrop($event)">
+
+                <input #facultyReceiptInput type="file" accept="application/pdf" class="hidden"
+                    (change)="onReceiptChange($event)">
+
+                <p class="text-sm mb-3">Drop PDF file here</p>
+                <button type="button" (click)="facultyReceiptInput.click()"
+                    class="text-xs px-3 py-2 rounded bg-slate-700 text-white hover:bg-slate-800">
+                    Choose PDF
+                </button>
+
+                <p *ngIf="selectedReceiptFile()" class="mt-3 text-sm text-green-700 font-medium">
+                    Selected: {{ selectedReceiptFile()?.name }}
+                </p>
+            </div>
+
+            <div class="mt-5 flex justify-end gap-2">
+                <button type="button" (click)="closeMarkPaidModal()"
+                    class="text-sm px-4 py-2 rounded border border-input bg-white hover:bg-slate-100">
+                    Cancel
+                </button>
+                <button type="button" (click)="confirmMarkPaid()" [disabled]="loading()"
+                    class="text-sm px-4 py-2 rounded bg-green-600 text-white hover:bg-green-700 disabled:opacity-60">
+                    Paid
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div *ngIf="showAddFacultyModal()" class="fixed inset-0 z-50 flex items-start justify-end p-4 sm:p-6">
+        <div class="absolute inset-0 bg-black/40" (click)="closeAddFacultyModal()"></div>
+
+        <div class="modal-transparent-card relative w-full max-w-md mt-8">
+            <button type="button" class="close-icon-btn" (click)="closeAddFacultyModal()" title="Close">
+                <lucide-icon name="x" class="h-4 w-4"></lucide-icon>
+            </button>
+
+            <h3 class="text-lg font-semibold mb-4">Add Faculty</h3>
+
+            <div class="space-y-3">
+                <div>
+                    <label class="block text-sm font-medium mb-1">UUID *</label>
+                    <input [(ngModel)]="facultyProfileForm.uuid" type="text" class="search-input" placeholder="BLE/Phone UUID">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Name *</label>
+                    <input [(ngModel)]="facultyProfileForm.name" type="text" class="search-input" placeholder="Faculty full name">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Registration Number *</label>
+                    <input [(ngModel)]="facultyProfileForm.registration_number" type="text" class="search-input" placeholder="e.g., FAC-2026-001">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Phone Number</label>
+                    <input [(ngModel)]="facultyProfileForm.phone_number" type="text" class="search-input" placeholder="e.g., 9876543210">
+                </div>
+            </div>
+
+            <div class="mt-5 flex justify-end">
+                <button type="button" (click)="addFacultyProfile()" [disabled]="loading()" class="search-btn min-w-[120px]">
+                    ADD
+                </button>
+            </div>
+        </div>
     </div>
 
     <!-- Loading indicator -->

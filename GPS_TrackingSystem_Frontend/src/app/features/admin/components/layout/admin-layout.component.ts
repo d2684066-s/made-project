@@ -23,6 +23,7 @@ export class AdminLayoutComponent {
     { path: '/admin/offences', iconName: 'alert-triangle', label: 'OFFENCES', end: false },
     { path: '/admin/student-offences', iconName: 'graduation-cap', label: 'STUDENT_OFFENCES', end: false },
     { path: '/admin/students', iconName: 'users', label: 'STUDENTS', end: false },
+    { path: '/admin/faculty', iconName: 'users', label: 'FACULTY', end: false },
     { path: '/admin/drivers', iconName: 'user-cog', label: 'DRIVERS', end: false },
     { path: '/admin/trips', iconName: 'route', label: 'TRIPS', end: false },
     { path: '/admin/bookings', iconName: 'ambulance', label: 'BOOKINGS', end: false },

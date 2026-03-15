@@ -12,6 +12,7 @@ import { FacultyOffencesComponent } from './features/admin/pages/faculty-offence
 import { OffencesDashboardComponent } from './features/admin/pages/offences/offences-dashboard.component';
 import { StudentListComponent } from './features/admin/pages/students/student-list.component';
 import { DriverListComponent } from './features/admin/pages/drivers/driver-list.component';
+import { FacultyListComponent } from './features/admin/pages/faculty/faculty-list.component';
 import { BookingsListComponent } from './features/admin/pages/bookings/bookings-list.component';
 import { TripsListComponent } from './features/admin/pages/trips/trips-list.component';
 import { SupportListComponent } from './features/admin/pages/support/support-list.component';
@@ -35,6 +36,7 @@ export const routes: Routes = [
             { path: 'student-offences', component: StudentOffencesComponent },
             { path: 'faculty-offences', component: FacultyOffencesComponent },
             { path: 'students', component: StudentListComponent },
+            { path: 'faculty', component: FacultyListComponent },
             { path: 'drivers', component: DriverListComponent },
             { path: 'bookings', component: BookingsListComponent },
             { path: 'trips', component: TripsListComponent },

@@ -91,6 +91,7 @@ class Student(BaseModel):
     student_id = models.CharField(max_length=255, unique=True)
     name = models.CharField(max_length=255)
     email = models.EmailField(blank=True, null=True)
+    phone_number = models.CharField(max_length=20, blank=True, null=True)
     phone_uuid = models.CharField(max_length=255, unique=True, blank=True, null=True)  # Phone device identifier
     is_active = models.BooleanField(default=True)
 
@@ -106,6 +107,7 @@ class Faculty(BaseModel):
     faculty_id = models.CharField(max_length=255, unique=True)
     name = models.CharField(max_length=255)
     email = models.EmailField(blank=True, null=True)
+    phone_number = models.CharField(max_length=20, blank=True, null=True)
     phone_uuid = models.CharField(max_length=255, unique=True, blank=True, null=True)  # Phone device identifier
     is_active = models.BooleanField(default=True)
 
@@ -129,6 +131,7 @@ class StudentOffence(BaseModel):
     fine_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     is_paid = models.BooleanField(default=False)
     paid_date = models.DateTimeField(null=True, blank=True)
+    receipt_pdf = models.FileField(upload_to='offence_receipts/students/', null=True, blank=True)
     description = models.TextField(blank=True)
 
     def __str__(self):
@@ -151,6 +154,7 @@ class FacultyOffence(BaseModel):
     fine_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     is_paid = models.BooleanField(default=False)
     paid_date = models.DateTimeField(null=True, blank=True)
+    receipt_pdf = models.FileField(upload_to='offence_receipts/faculty/', null=True, blank=True)
     description = models.TextField(blank=True)
 
     def __str__(self):
