@@ -1,4 +1,4 @@
-import { Injectable, signal, effect } from '@angular/core';
+import { Injectable, signal } from '@angular/core';
 
 @Injectable({
     providedIn: 'root'
@@ -6,26 +6,23 @@ import { Injectable, signal, effect } from '@angular/core';
 export class ThemeService {
     isDarkMode = signal<boolean>(true);
 
-    constructor() {
-        // Load from local storage or default to dark
-        const storedTheme = localStorage.getItem('theme');
-        if (storedTheme) {
-            this.isDarkMode.set(storedTheme === 'dark');
-        }
+    private applyThemeClass(isDark: boolean) {
+        if (typeof document === 'undefined') return;
+        document.documentElement.classList.toggle('dark', isDark);
+        document.body.classList.toggle('dark', isDark);
+    }
 
-        // Effect to update body class and local storage
-        effect(() => {
-            if (this.isDarkMode()) {
-                document.body.classList.add('dark');
-                localStorage.setItem('theme', 'dark');
-            } else {
-                document.body.classList.remove('dark');
-                localStorage.setItem('theme', 'light');
-            }
-        });
+    constructor() {
+        // Light theme is disabled. Force dark mode globally.
+        this.isDarkMode.set(true);
+        this.applyThemeClass(true);
+        localStorage.setItem('theme', 'dark');
     }
 
     toggleTheme() {
-        this.isDarkMode.update(current => !current);
+        // Keep dark mode locked.
+        this.isDarkMode.set(true);
+        this.applyThemeClass(true);
+        localStorage.setItem('theme', 'dark');
     }
 }

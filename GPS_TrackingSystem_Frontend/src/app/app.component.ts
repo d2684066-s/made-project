@@ -1,7 +1,7 @@
-import { Component } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 import { TranslateService } from '@ngx-translate/core';
-import { HttpClient } from '@angular/common/http';
+import { ThemeService } from './core/services/theme.service';
 
 @Component({
   selector: 'app-root',
@@ -11,31 +11,25 @@ import { HttpClient } from '@angular/common/http';
   styleUrl: './app.component.css'
 })
 export class AppComponent {
+  // Instantiate theme service at app root so dark mode is applied from initial load.
+  private readonly themeService = inject(ThemeService);
 
-  constructor(private translate: TranslateService, private http: HttpClient) {
+  constructor(private translate: TranslateService) {
     // set default language and restore previously selected language (persisted in localStorage)
     this.translate.setDefaultLang('en');
     const savedLang = localStorage.getItem('lang') || 'en';
 
-    // pre-load translation file (ensures translate pipe has data immediately)
-    this.http.get(`/assets/i18n/${savedLang}.json`).subscribe({
-      next: (translations) => {
-        this.translate.setTranslation(savedLang, translations as any, true);
-        this.translate.use(savedLang).subscribe({ next: () => console.log(`Translations loaded for ${savedLang}`) });
+    this.translate.use(savedLang).subscribe({
+      next: () => {
+        // no-op: language initialized
       },
       error: (err) => {
-        console.error('Failed to fetch translation file for', savedLang, err);
-        // fall back to English
-        if (savedLang !== 'en') {
-          this.http.get('/assets/i18n/en.json').subscribe({
-            next: (t) => { this.translate.setTranslation('en', t as any, true); this.translate.use('en').subscribe(); },
-            error: () => this.translate.use('en').subscribe()
-          });
-        }
+        console.error('Failed to load language', savedLang, err);
+        this.translate.use('en').subscribe();
       }
     });
 
-    // debug hook — updates when language changes at runtime
-    this.translate.onLangChange.subscribe(evt => console.log('onLangChange ->', evt.lang));
+    // Keep a reference to avoid accidental tree-shaking of root effectful service.
+    void this.themeService;
   }
 } 

@@ -24,14 +24,22 @@
               "src/favicon.ico",
               {
                 "glob": "**/*",
-                "input": "public",
+                "input": "src/public/assets",
                 "output": "/assets/"
+              },
+              {
+                "glob": "**/*",
+                "input": "src/public/i18n",
+                "output": "/assets/i18n/"
               }
             ],
             "styles": [
               "src/styles.css"
             ],
-            "scripts": []
+            "scripts": [],
+            "allowedCommonJsDependencies": [
+              "maplibre-gl"
+            ]
           },
           "configurations": {
             "production": {
@@ -90,8 +98,13 @@
               "src/favicon.ico",
               {
                 "glob": "**/*",
-                "input": "public",
+                "input": "src/public/assets",
                 "output": "/assets/"
+              },
+              {
+                "glob": "**/*",
+                "input": "src/public/i18n",
+                "output": "/assets/i18n/"
               }
             ],
             "styles": [

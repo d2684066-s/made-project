@@ -34,6 +34,7 @@
     "DRIVERS": "चालक",
     "TRIPS": "यात्राएं",
     "BOOKINGS": "बुकिंग",
+    "SUPPORT": "सहायता",
     "ESP32_DEVICES": "ESP-32 उपकरण",
     "ADD_NEW_VEHICLE": "नया वाहन जोड़ें",
     "REGISTER_NEW_VEHICLE_DESC": "सिस्टम में एक नई बस या एंबुलेंस पंजीकृत करें",
@@ -102,5 +103,9 @@
     "EMAIL": "ईमेल",
     "PASSWORD": "पासवर्ड",
     "SIGN_IN": "साइन इन",
-    "EMAIL_ADDRESS": "ईमेल पता"
+    "EMAIL_ADDRESS": "ईमेल पता",
+    "FRONT_TITLE": "कॉलेज जीपीएस सिस्टम",
+    "FRONT_SUBTITLE": "हमारे कैंपस वाहनों के लिए उन्नत रीयल-टाइम फ्लीट मॉनिटरिंग और ट्रैकिंग सिस्टम।",
+    "FRONT_ADMIN_LOGIN": "एडमिन लॉगिन",
+    "FRONT_LEARN_MORE": "और जानें"
 }

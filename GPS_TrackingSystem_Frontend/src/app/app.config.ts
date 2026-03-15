@@ -16,16 +16,14 @@ export const appConfig: ApplicationConfig = {
     provideRouter(routes, withComponentInputBinding()),
     provideHttpClient(withInterceptors([tokenInterceptor])),
 
-    // ✅ Translation loader
-    provideTranslateHttpLoader({
-      prefix: '/assets/i18n/',
-      suffix: '.json'
-    }),
-
-    // ✅ Translation service
+    // ✅ Translation service + loader
     provideTranslateService({
       lang: 'en',
-      fallbackLang: 'en'
+      fallbackLang: 'en',
+      loader: provideTranslateHttpLoader({
+        prefix: '/assets/i18n/',
+        suffix: '.json'
+      })
     }),
 
     // icons

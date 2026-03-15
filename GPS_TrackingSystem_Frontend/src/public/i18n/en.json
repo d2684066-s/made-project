@@ -34,6 +34,7 @@
     "DRIVERS": "Drivers",
     "TRIPS": "Trips",
     "BOOKINGS": "Bookings",
+    "SUPPORT": "Support",
     "ESP32_DEVICES": "ESP-32 Devices",
     "ADD_NEW_VEHICLE": "Add New Vehicle",
     "REGISTER_NEW_VEHICLE_DESC": "Register a new bus or ambulance to the system",
@@ -105,5 +106,9 @@
     "EMAIL_ADDRESS": "Email Address",
     "SUPPORT_TICKETS": "Support Tickets",
     "NO_ISSUES": "No issues found",
-    "CONFIRM_DELETE": "Are you sure you want to delete this issue?"
+    "CONFIRM_DELETE": "Are you sure you want to delete this issue?",
+    "FRONT_TITLE": "COLLEGE GPS SYSTEM",
+    "FRONT_SUBTITLE": "Advanced real-time fleet monitoring and tracking system for our campus vehicles.",
+    "FRONT_ADMIN_LOGIN": "Admin Login",
+    "FRONT_LEARN_MORE": "Learn More"
 }

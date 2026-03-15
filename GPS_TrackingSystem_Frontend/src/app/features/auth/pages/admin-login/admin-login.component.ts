@@ -41,15 +41,15 @@ export class AdminLoginComponent {
     this.loading.set(true);
     this.error.set(null);
     
-    console.log('🔄 Admin Login: Calling auth service...');
+    console.log('Admin Login: Calling auth service...');
 
     this.authService.login(this.loginForm.value, 'admin').subscribe({
       next: () => {
-        console.log('✅ Admin Login: Login successful, navigating to admin');
+        console.log(' Admin Login: Login successful, navigating to admin');
         this.router.navigate(['/admin']);
       },
       error: (err) => {
-        console.error('❌ Admin Login: Login error', err);
+        console.error('Admin Login: Login error', err);
         const errorMsg = err.message || err.error?.error || err.error?.detail || 'Invalid credentials';
         this.error.set(errorMsg);
         this.loading.set(false);
