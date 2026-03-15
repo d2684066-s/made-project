@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { driverApi } from '../lib/api';
 
-const LOCATION_UPDATE_INTERVAL = 5000; // 5 seconds
+const LOCATION_UPDATE_INTERVAL = 10000; // 10 seconds
 
 /**
  * Hook to manage GPS tracking for driver mobile app
  * 
- * Sends location updates to backend every 5 seconds
+ * Sends location updates to backend every 10 seconds
  * Uses navigator.geolocation.watchPosition() for continuous tracking
  * 
  * Usage:
@@ -88,7 +88,7 @@ export const useGPSTracking = (vehicleId) => {
             }
         );
 
-        // Send location to backend every 5 seconds
+        // Send location to backend every 10 seconds
         intervalIdRef.current = setInterval(() => {
             if (locationBufferRef.current) {
                 const { latitude, longitude, speed } = locationBufferRef.current;

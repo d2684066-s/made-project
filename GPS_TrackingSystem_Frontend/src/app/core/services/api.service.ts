@@ -102,6 +102,7 @@ export class ApiService {
         }
         return this.http.get(`${environment.apiUrl}/api/admin/students/`, { params: httpParams });
     }
+    deleteUser(id: string): Observable<any> { return this.http.delete(`${environment.apiUrl}/api/admin/users/${id}/`); }
     deleteStudent(id: string): Observable<any> { return this.http.delete(`${environment.apiUrl}/api/admin/students/${id}/`); }
     getDrivers(params?: any): Observable<any> {
         let httpParams = new HttpParams();
@@ -115,6 +116,18 @@ export class ApiService {
         return this.http.get(`${environment.apiUrl}/api/admin/drivers/`, { params: httpParams });
     }
     deleteDriver(id: string): Observable<any> { return this.http.delete(`${environment.apiUrl}/api/admin/drivers/${id}/`); }
+    getFaculty(params?: any): Observable<any> {
+        let httpParams = new HttpParams();
+        if (params) {
+            Object.keys(params).forEach(key => {
+                if (params[key] !== undefined && params[key] !== null) {
+                    httpParams = httpParams.set(key, params[key]);
+                }
+            });
+        }
+        return this.http.get(`${environment.apiUrl}/safety/faculty/`, { params: httpParams });
+    }
+    deleteFaculty(id: string): Observable<any> { return this.http.delete(`${environment.apiUrl}/safety/faculty/${id}/`); }
     getOffences(params?: any): Observable<any> {
         let httpParams = new HttpParams();
         if (params) {
@@ -139,11 +152,16 @@ export class ApiService {
                 }
             });
         }
-        return this.http.get(`${environment.apiUrl}/safety/api/student-offences/`, { params: httpParams });
+        return this.http.get(`${environment.apiUrl}/safety/student-offences/`, { params: httpParams });
     }
-    createStudentOffence(data: any): Observable<any> { return this.http.post(`${environment.apiUrl}/safety/api/student-offences/`, data); }
-    deleteStudentOffence(id: string): Observable<any> { return this.http.delete(`${environment.apiUrl}/safety/api/student-offences/${id}/`); }
-    markStudentOffenceAsPaid(id: string): Observable<any> { return this.http.post(`${environment.apiUrl}/safety/api/student-offences/${id}/`, { action: 'mark_paid' }); }
+    createStudentOffence(data: any): Observable<any> { return this.http.post(`${environment.apiUrl}/safety/student-offences/`, data); }
+    addStudentProfile(data: any): Observable<any> { return this.http.post(`${environment.apiUrl}/safety/students/`, data); }
+    deleteStudentOffence(id: string): Observable<any> { return this.http.delete(`${environment.apiUrl}/safety/student-offences/${id}/`); }
+    markStudentOffenceAsPaid(id: string, receiptFile: File): Observable<any> {
+        const formData = new FormData();
+        formData.append('receipt_pdf', receiptFile);
+        return this.http.post(`${environment.apiUrl}/safety/student-offences/${id}/mark-paid/`, formData);
+    }
     
     // Faculty Offences
     getFacultyOffences(params?: any): Observable<any> { 
@@ -155,11 +173,16 @@ export class ApiService {
                 }
             });
         }
-        return this.http.get(`${environment.apiUrl}/safety/api/faculty-offences/`, { params: httpParams });
+        return this.http.get(`${environment.apiUrl}/safety/faculty-offences/`, { params: httpParams });
     }
-    createFacultyOffence(data: any): Observable<any> { return this.http.post(`${environment.apiUrl}/safety/api/faculty-offences/`, data); }
-    deleteFacultyOffence(id: string): Observable<any> { return this.http.delete(`${environment.apiUrl}/safety/api/faculty-offences/${id}/`); }
-    markFacultyOffenceAsPaid(id: string): Observable<any> { return this.http.post(`${environment.apiUrl}/safety/api/faculty-offences/${id}/`, { action: 'mark_paid' }); }
+    createFacultyOffence(data: any): Observable<any> { return this.http.post(`${environment.apiUrl}/safety/faculty-offences/`, data); }
+    addFacultyProfile(data: any): Observable<any> { return this.http.post(`${environment.apiUrl}/safety/faculty/`, data); }
+    deleteFacultyOffence(id: string): Observable<any> { return this.http.delete(`${environment.apiUrl}/safety/faculty-offences/${id}/`); }
+    markFacultyOffenceAsPaid(id: string, receiptFile: File): Observable<any> {
+        const formData = new FormData();
+        formData.append('receipt_pdf', receiptFile);
+        return this.http.post(`${environment.apiUrl}/safety/faculty-offences/${id}/mark-paid/`, formData);
+    }
     
     getBookings(params?: any): Observable<any> {
         let httpParams = new HttpParams();

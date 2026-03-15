@@ -13,7 +13,9 @@ from .views import (
     BookAmbulanceView,
     ActiveBusesView,
     PublicActiveVehiclesView,
+    AmbulanceZonesView,
     BusETAView,
+    BusLiveETAView,
     AvailableAmbulancesView,
     MyBookingsView,
     CheckUserView,
@@ -44,6 +46,7 @@ from .views import (
     DeleteStudentView,
     DriverListView,
     DeleteDriverView,
+    DeleteUserView,
     AdminListView,
     AdminDetailView,
     PendingAdminListCreateView,
@@ -107,6 +110,7 @@ urlpatterns = [
     
     path('admin/students/', StudentListView.as_view(), name='student-list'),
     path('admin/students/<uuid:student_id>/', DeleteStudentView.as_view(), name='delete-student'),
+    path('admin/users/<uuid:user_id>/', DeleteUserView.as_view(), name='delete-user'),
     
     path('admin/drivers/', DriverListView.as_view(), name='driver-list'),
     path('admin/drivers/<uuid:driver_id>/', DeleteDriverView.as_view(), name='delete-driver'),
@@ -138,7 +142,9 @@ urlpatterns = [
     # Public
     path('public/buses/', ActiveBusesView.as_view(), name='active-buses'),
     path('public/active-vehicles/', PublicActiveVehiclesView.as_view(), name='public-active-vehicles'),
+    path('public/ambulance-zones/', AmbulanceZonesView.as_view(), name='ambulance-zones'),
     path('public/bus/<uuid:bus_id>/eta/', BusETAView.as_view(), name='bus-eta'), 
+    path('public/bus/eta-live/', BusLiveETAView.as_view(), name='bus-eta-live'),
     path('public/ambulances/', AvailableAmbulancesView.as_view(), name='available-ambulances'),
     path('public/my-bookings/', MyBookingsView.as_view(), name='my-bookings'),
     path('public/check-user/', CheckUserView.as_view(), name='check-user'),
@@ -148,5 +154,6 @@ urlpatterns = [
     # GPS & RFID (from devices)
     path('gps/receive/', ReceiveGPSView.as_view(), name='receive-gps'),
     path('vehicles/update-location/', UpdateVehicleLocationView.as_view(), name='update-location'),
+    path('driver/location/update/', UpdateVehicleLocationView.as_view(), name='driver-location-update'),
     path('rfid/scan/', ReceiveRFIDScanView.as_view(), name='receive-rfid'),
 ]

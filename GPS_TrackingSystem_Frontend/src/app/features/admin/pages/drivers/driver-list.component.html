@@ -19,13 +19,12 @@
         </tr>
       </thead>
       <tbody>
-        <tr *ngFor="let d of drivers()" class="hover:bg-muted/50">
-          <td class="border border-input p-2">{{ d.name }}</td>
-          <td class="border border-input p-2">{{ d.phone }}</td>
-          <td class="border border-input p-2">{{ d.registration_id }}</td>
+        <tr *ngFor="let user of drivers()" class="hover:bg-muted/50">
+          <td class="border border-input p-2">{{ user.name }}</td>
+          <td class="border border-input p-2">{{ user.phone }}</td>
+          <td class="border border-input p-2">{{ user.registration_id }}</td>
           <td class="border border-input p-2 text-center">
-            <button (click)="deleteDriver(d.id)"
-              class="text-xs px-2 py-1 rounded bg-red-600 text-white hover:bg-red-700">
+            <button class="delete-btn" (click)="deleteUser(user.id)">
               <lucide-icon name="trash-2" class="h-4 w-4"></lucide-icon>
             </button>
           </td>

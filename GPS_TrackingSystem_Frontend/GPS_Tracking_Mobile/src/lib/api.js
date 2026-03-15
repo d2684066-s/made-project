@@ -68,6 +68,20 @@ export const publicApi = {
   },
 
   /**
+   * Get live cached ETA to Baitarani Hall for currently active bus trip.
+   * Backend endpoint: GET /api/public/bus/eta-live/
+   */
+  async getBusLiveETA() {
+    try {
+      const response = await axios.get(`${API_URL}/api/public/bus/eta-live/`);
+      return response;
+    } catch (error) {
+      console.error('Failed to get live bus ETA:', error);
+      throw error;
+    }
+  },
+
+  /**
    * Get available ambulances
    * Backend endpoint: GET /api/public/ambulances/
    */
@@ -77,6 +91,20 @@ export const publicApi = {
       return response;
     } catch (error) {
       console.error('Failed to fetch ambulances:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Get ambulance service zones
+   * Backend endpoint: GET /api/public/ambulance-zones/
+   */
+  async getAmbulanceZones() {
+    try {
+      const response = await axios.get(`${API_URL}/api/public/ambulance-zones/`);
+      return response;
+    } catch (error) {
+      console.error('Failed to fetch ambulance zones:', error);
       throw error;
     }
   },
@@ -171,11 +199,11 @@ export const driverApi = {
 
   /**
    * Update vehicle location from mobile driver app
-   * Backend endpoint: POST /api/vehicles/update-location/
+   * Backend endpoint: POST /api/driver/location/update/
    */
   async updateVehicleLocation(vehicleId, lat, lng, speed = 0) {
     try {
-      const response = await axios.post(`${API_URL}/api/vehicles/update-location/`, {
+      const response = await axios.post(`${API_URL}/api/driver/location/update/`, {
         vehicle_id: vehicleId,
         lat: lat,
         lng: lng,
@@ -287,9 +315,17 @@ driverApi.endTrip = async (tripId, token) => {
   }
 };
 
-driverApi.markOutOfStation = async (vehicleId, token) => {
+driverApi.markOutOfStation = async (vehicleId, isOutOfStation = true, token = null) => {
+  // Backward compatibility: allow previous signature (vehicleId, token)
+  if (typeof isOutOfStation === 'string' && token === null) {
+    token = isOutOfStation;
+    isOutOfStation = true;
+  }
+
   try {
-    const response = await axios.post(`${API_URL}/api/driver/mark-out-of-station/${vehicleId}/`, {}, {
+    const response = await axios.post(`${API_URL}/api/driver/mark-out-of-station/${vehicleId}/`, {
+      is_out_of_station: Boolean(isOutOfStation),
+    }, {
       headers: token ? { Authorization: `Bearer ${token}` } : {}
     });
     return response;

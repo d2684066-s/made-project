@@ -7,6 +7,15 @@ const LocationServiceCheck = ({ onPermissionGranted, onPermissionDenied }) => {
 
   useEffect(() => {
     checkLocationPermission();
+
+    // Re-check when the user comes back to this tab after changing browser/OS settings
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        checkLocationPermission();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, []);
 
   const checkLocationPermission = () => {
@@ -22,28 +31,29 @@ const LocationServiceCheck = ({ onPermissionGranted, onPermissionDenied }) => {
     if (navigator.permissions && navigator.permissions.query) {
       navigator.permissions.query({ name: 'geolocation' }).then((permission) => {
         if (permission.state === 'granted') {
+          localStorage.setItem('location_permission_granted', 'true');
           setStatus('enabled');
           setMessage('Location services are enabled ✓');
           if (onPermissionGranted) onPermissionGranted();
         } else if (permission.state === 'denied') {
           setStatus('disabled');
-          setMessage('Location access denied. Please enable in settings.');
+          setMessage('Location access denied. Please enable in browser settings.');
           if (onPermissionDenied) onPermissionDenied();
         } else {
-          // prompt state - try to get location
+          // prompt state - try to get location to trigger the browser prompt
           requestLocation();
         }
 
-        // Listen for permission changes
+        // Listen for permission changes (e.g. user allows in address bar)
         permission.addEventListener('change', () => {
           if (permission.state === 'granted') {
+            localStorage.setItem('location_permission_granted', 'true');
             setStatus('enabled');
             setMessage('Location services are enabled ✓');
             if (onPermissionGranted) onPermissionGranted();
           } else if (permission.state === 'denied') {
             setStatus('disabled');
-            setMessage('Location access denied. Please enable in settings.');
-            if (onPermissionDenied) onPermissionDenied();
+            setMessage('Location access denied. Please enable in browser settings.');
           }
         });
       });
@@ -62,26 +72,27 @@ const LocationServiceCheck = ({ onPermissionGranted, onPermissionDenied }) => {
         console.log('Location permission granted:', position);
         setStatus('enabled');
         setMessage('Location access granted! You can now use navigation features.');
-        if (onPermissionGranted) onPermissionGranted();
-        
-        // Store permission as granted
         localStorage.setItem('location_permission_granted', 'true');
+        if (onPermissionGranted) onPermissionGranted();
       },
       (error) => {
         console.error('Geolocation error:', error);
-        setStatus('disabled');
-        
+
         if (error.code === error.PERMISSION_DENIED) {
-          setMessage('Location access denied. Please enable in your browser settings or device location services.');
-        } else if (error.code === error.POSITION_UNAVAILABLE) {
-          setMessage('Location information is unavailable. Make sure location services are enabled on your device.');
-        } else if (error.code === error.TIMEOUT) {
-          setMessage('Location request took too long. Please try again.');
+          // Hard denial — user explicitly blocked it
+          setStatus('disabled');
+          setMessage('Location access denied. Click the lock icon in the address bar and allow location, then tap "Enable Location Services" below.');
+          if (onPermissionDenied) onPermissionDenied();
         } else {
-          setMessage('Unable to determine location. Make sure location services are enabled.');
+          // POSITION_UNAVAILABLE or TIMEOUT — permission was granted but hardware/OS
+          // location is off or slow. Let the user proceed rather than blocking the app.
+          const hint = error.code === error.TIMEOUT
+            ? 'Location is taking too long — GPS signal may be weak.'
+            : 'Location hardware unavailable. Enable Location Services in your device/OS settings.';
+          setStatus('disabled');
+          setMessage(hint + ' You can still continue — some GPS features may be limited.');
+          // Do NOT auto-call onPermissionDenied; let user decide via buttons below.
         }
-        
-        if (onPermissionDenied) onPermissionDenied();
       },
       {
         enableHighAccuracy: false,
@@ -160,7 +171,15 @@ const LocationServiceCheck = ({ onPermissionGranted, onPermissionDenied }) => {
                 className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-4 rounded-xl transition-all active:scale-95 flex items-center justify-center gap-2"
               >
                 <MapPin size={18} />
-                Enable Location Services
+                Try Again
+              </button>
+              <button
+                onClick={() => {
+                  if (onPermissionGranted) onPermissionGranted();
+                }}
+                className="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-4 rounded-xl transition-all active:scale-95"
+              >
+                Continue Anyway
               </button>
               <button
                 onClick={() => {

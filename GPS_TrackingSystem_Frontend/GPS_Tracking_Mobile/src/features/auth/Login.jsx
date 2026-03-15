@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../core/auth.context';
 import { toast } from 'sonner';
+import campusImg from "../../assets/campus.jpg";
 import { Loader2, ArrowLeft, Mail, Lock, Eye, EyeOff, LogIn } from 'lucide-react';
 
 const Login = () => {
@@ -42,7 +43,7 @@ const Login = () => {
     };
 
     return (
-        <div className="relative w-full bg-[#f6f7f8] dark:bg-[#101922] font-sans text-slate-900 dark:text-slate-100 antialiased transition-colors duration-300 selection:bg-blue-100 min-h-screen overflow-y-auto">
+        <div className="relative w-full bg-[#f6f7f8] dark:bg-[#101922] font-sans text-slate-900 dark:text-slate-100 antialiased transition-colors duration-300 selection:bg-blue-100 min-h-screen overflow-y-auto scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent dark:scrollbar-thumb-slate-700">
             {/* Header */}
             <div className="flex items-center bg-[#f6f7f8] dark:bg-[#101922] p-4 pb-2 justify-between sticky top-0 z-10">
                 <button
@@ -86,7 +87,7 @@ const Login = () => {
             <div className="px-4 py-3">
                 <div
                     className="w-full bg-center bg-no-repeat bg-cover flex flex-col justify-end overflow-hidden bg-blue-500/10 rounded-lg min-h-[220px] shadow-sm relative group"
-                    style={{ backgroundImage: 'url("https://lh3.googleusercontent.com/aida-public/AB6AXuDSByXm8uS0ZOic1OIUaKLg_1clC3E-3sGi38vA_2fmIxpf5i88m4SkgypMOEkYZ2nw80eIVLdf2jyQj_QYmQAxNBnu2xkq-OGzic5lHjEYW_pbgu45bAS2H3go6Nlh6oVhEXVOWHA6NSUabQxgA1sCsR53UaSqmuTR_gT4M0ZIHMHQD2vVWQ_I0g9JXPlNfLa5jArXts5210307HKymXsjCOCpOMHW-pFHgTRz8x-Aj1C76lvOtr3DV2Qa794yfb7rBDKmylaLSMo")' }}
+                    style={{ backgroundImage: `url("${campusImg}")` }}
                 >
                     <div className="absolute inset-0 bg-gradient-to-t from-[#101922]/40 to-transparent"></div>
                 </div>

@@ -27,7 +27,10 @@ export class OffencesDashboardComponent implements OnInit {
     this.loading.set(true);
     this.api.getStudentOffences().subscribe({
       next: (data: any) => {
-        this.studentCount.set(Array.isArray(data) ? data.length : 0);
+        const offences = Array.isArray(data?.offences)
+          ? data.offences
+          : (Array.isArray(data) ? data : []);
+        this.studentCount.set(offences.length);
         this.loading.set(false);
       },
       error: () => {
@@ -37,7 +40,10 @@ export class OffencesDashboardComponent implements OnInit {
     });
     this.api.getFacultyOffences().subscribe({
       next: (data: any) => {
-        this.facultyCount.set(Array.isArray(data) ? data.length : 0);
+        const offences = Array.isArray(data?.offences)
+          ? data.offences
+          : (Array.isArray(data) ? data : []);
+        this.facultyCount.set(offences.length);
       },
       error: () => {
         this.facultyCount.set(0);

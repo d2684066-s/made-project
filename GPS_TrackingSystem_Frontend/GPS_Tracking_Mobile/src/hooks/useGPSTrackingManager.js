@@ -25,7 +25,7 @@ export const useGPSTrackingManager = (vehicleId, isTripActive = false) => {
             startGPS();
             setTrackingState('active');
             toast.success('GPS Tracking Started', {
-                description: 'Sending location updates every 5 seconds'
+                description: 'Sending location updates every 10 seconds'
             });
         } else if (!isTripActive && isTracking) {
             setTrackingState('stopping');

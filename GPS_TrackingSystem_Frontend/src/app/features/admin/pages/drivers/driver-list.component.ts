@@ -41,14 +41,20 @@ export class DriverListComponent implements OnInit {
     this.loadDrivers();
   }
 
-  deleteDriver(id: string) {
-    if (confirm('Delete driver?')) {
-      this.api.deleteDriver(id).subscribe({
-        next: () => {
-          this.loadDrivers();
-        },
-        error: (err) => console.error('delete error', err)
-      });
+  deleteUser(id: string) {
+    if (!confirm('Are you sure you want to delete this user?')) {
+      return;
     }
+
+    this.api.deleteUser(id).subscribe({
+      next: () => {
+        alert('User deleted');
+        this.loadDrivers();
+      },
+      error: (err) => {
+        console.error('delete error', err);
+        alert('Delete failed');
+      }
+    });
   }
 }

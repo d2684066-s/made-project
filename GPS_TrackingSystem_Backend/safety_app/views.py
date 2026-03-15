@@ -5,7 +5,10 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.parsers import MultiPartParser, FormParser
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
+from django.shortcuts import get_object_or_404
 from datetime import timedelta
 import json
 from .models import (
@@ -26,12 +29,22 @@ def ble_log(request):
         rssi = data.get('rssi', -80)
         timestamp_str = data.get('timestamp', '')
 
-        # Parse timestamp (ESP32 millis)
+        # Parse timestamp safely. Keep server time fallback for invalid or boot-millis inputs.
+        timestamp = timezone.now()
         try:
-            timestamp = timezone.now()  # fallback to server time
-            if timestamp_str.isdigit():
-                timestamp = timezone.now() - timedelta(milliseconds=int(timestamp_str))
-        except:
+            if isinstance(timestamp_str, str) and timestamp_str.isdigit():
+                raw_ts = int(timestamp_str)
+                if raw_ts >= 10**12:
+                    timestamp = timezone.datetime.fromtimestamp(raw_ts / 1000.0, tz=timezone.utc)
+                elif raw_ts >= 10**9:
+                    timestamp = timezone.datetime.fromtimestamp(raw_ts, tz=timezone.utc)
+            elif isinstance(timestamp_str, str) and timestamp_str:
+                parsed_ts = parse_datetime(timestamp_str)
+                if parsed_ts is not None:
+                    if timezone.is_naive(parsed_ts):
+                        parsed_ts = timezone.make_aware(parsed_ts, timezone.get_current_timezone())
+                    timestamp = parsed_ts
+        except Exception:
             timestamp = timezone.now()
 
         print(f"BLE log received: {reader_id} | UUID: {phone_uuid} | RSSI: {rssi}")
@@ -59,24 +72,31 @@ def ble_log(request):
         if reader_id in ['road1', 'gate2']:
             recent_gate1 = BLEDetection.objects.filter(
                 phone_uuid=phone_uuid,
-                reader_id__in=['gate1', 'gate'],
-                timestamp__gte=timestamp - timedelta(seconds=60)
-            ).order_by('timestamp').first()
+                reader_id='gate1',
+                timestamp__gte=timestamp - timedelta(seconds=60),
+                timestamp__lt=timestamp
+            ).order_by('-timestamp').first()
 
-            if recent_gate1:
+            if recent_gate1 and recent_gate1.timestamp:
                 time_diff = (timestamp - recent_gate1.timestamp).total_seconds()
+                if time_diff <= 0:
+                    return JsonResponse({'status': 'ok', 'message': 'BLE log saved'}, status=201)
+
                 distance = 30  # meters between gates
                 speed = (distance / time_diff) * 3.6  # km/h
 
                 if speed > 20:
+                    violation = ViolationReport.objects.create(
+                        violation_type='overspeed',
+                        timestamp=timestamp,
+                        evidence=f"Speed {speed:.1f} km/h between {recent_gate1.reader_id} and {reader_id}",
+                        location=reader_id
+                    )
+
                     student = Student.objects.filter(phone_uuid=phone_uuid).first()
+                    faculty = Faculty.objects.filter(phone_uuid=phone_uuid).first()
+
                     if student:
-                        violation = ViolationReport.objects.create(
-                            violation_type='overspeed',
-                            timestamp=timestamp,
-                            evidence=f"Speed {speed:.1f} km/h between {recent_gate1.reader_id} and {reader_id}",
-                            location=reader_id
-                        )
                         StudentOffence.objects.create(
                             student_id=student.student_id,
                             student_name=student.name,
@@ -86,6 +106,16 @@ def ble_log(request):
                             description=f"Overspeed {speed:.1f} km/h"
                         )
                         print(f"Overspeed challan for {student.name}: Rs 700")
+                    elif faculty:
+                        FacultyOffence.objects.create(
+                            faculty_id=faculty.faculty_id,
+                            faculty_name=faculty.name,
+                            violation=violation,
+                            severity='major',
+                            fine_amount=700,
+                            description=f"Overspeed {speed:.1f} km/h"
+                        )
+                        print(f"Overspeed challan for {faculty.name}: Rs 700")
 
         return JsonResponse({'status': 'ok', 'message': 'BLE log saved'}, status=201)
 
@@ -153,6 +183,8 @@ def test_challan(request):
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from django.db.models import Q
+from django.db import IntegrityError
+from core.permissions import IsAdmin
 from .serializers import (
     StudentOffenceSerializer, FacultyOffenceSerializer,
     StudentSerializer, FacultySerializer,
@@ -168,8 +200,12 @@ class StudentOffencesView(APIView):
     def get(self, request):
         """Get student offences with optional filtering"""
         try:
-            # Get offences from database
-            offences = StudentOffence.objects.all().order_by('-created_at')
+            # Default admin sheet to today's offences; this naturally resets after midnight.
+            today = timezone.localdate()
+            offences = StudentOffence.objects.filter(created_at__date=today).order_by('-created_at')
+
+            if request.query_params.get('all', '').lower() == 'true':
+                offences = StudentOffence.objects.all().order_by('-created_at')
             
             # Optional filtering
             student_id = request.query_params.get('student_id')
@@ -190,7 +226,7 @@ class StudentOffencesView(APIView):
                     Q(student_name__icontains=search)
                 )
             
-            serializer = StudentOffenceSerializer(offences, many=True)
+            serializer = StudentOffenceSerializer(offences, many=True, context={'request': request})
             return Response({
                 'count': offences.count(),
                 'offences': serializer.data
@@ -210,8 +246,12 @@ class FacultyOffencesView(APIView):
     def get(self, request):
         """Get faculty offences with optional filtering"""
         try:
-            # Get offences from database
-            offences = FacultyOffence.objects.all().order_by('-created_at')
+            # Default admin sheet to today's offences; this naturally resets after midnight.
+            today = timezone.localdate()
+            offences = FacultyOffence.objects.filter(created_at__date=today).order_by('-created_at')
+
+            if request.query_params.get('all', '').lower() == 'true':
+                offences = FacultyOffence.objects.all().order_by('-created_at')
             
             # Optional filtering
             faculty_id = request.query_params.get('faculty_id')
@@ -232,7 +272,7 @@ class FacultyOffencesView(APIView):
                     Q(faculty_name__icontains=search)
                 )
             
-            serializer = FacultyOffenceSerializer(offences, many=True)
+            serializer = FacultyOffenceSerializer(offences, many=True, context={'request': request})
             return Response({
                 'count': offences.count(),
                 'offences': serializer.data
@@ -245,9 +285,55 @@ class FacultyOffencesView(APIView):
             )
 
 
+class StudentOffenceMarkPaidView(APIView):
+    permission_classes = [IsAdmin]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request, offence_id):
+        offence = get_object_or_404(StudentOffence, id=offence_id)
+        receipt_file = request.FILES.get('receipt_pdf')
+
+        if not receipt_file:
+            return Response({'detail': 'receipt_pdf is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not receipt_file.name.lower().endswith('.pdf'):
+            return Response({'detail': 'Only PDF files are allowed'}, status=status.HTTP_400_BAD_REQUEST)
+
+        offence.receipt_pdf = receipt_file
+        offence.is_paid = True
+        offence.paid_date = timezone.now()
+        offence.save()
+
+        serializer = StudentOffenceSerializer(offence, context={'request': request})
+        return Response({'message': 'Student offence marked as paid', 'offence': serializer.data})
+
+
+class FacultyOffenceMarkPaidView(APIView):
+    permission_classes = [IsAdmin]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request, offence_id):
+        offence = get_object_or_404(FacultyOffence, id=offence_id)
+        receipt_file = request.FILES.get('receipt_pdf')
+
+        if not receipt_file:
+            return Response({'detail': 'receipt_pdf is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not receipt_file.name.lower().endswith('.pdf'):
+            return Response({'detail': 'Only PDF files are allowed'}, status=status.HTTP_400_BAD_REQUEST)
+
+        offence.receipt_pdf = receipt_file
+        offence.is_paid = True
+        offence.paid_date = timezone.now()
+        offence.save()
+
+        serializer = FacultyOffenceSerializer(offence, context={'request': request})
+        return Response({'message': 'Faculty offence marked as paid', 'offence': serializer.data})
+
+
 class StudentsListView(APIView):
     """Fetch all students from safety system database"""
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdmin]
 
     def get(self, request):
         """Get students with optional filtering"""
@@ -259,7 +345,9 @@ class StudentsListView(APIView):
                 students = students.filter(
                     Q(student_id__icontains=search) |
                     Q(name__icontains=search) |
-                    Q(email__icontains=search)
+                    Q(email__icontains=search) |
+                    Q(phone_uuid__icontains=search) |
+                    Q(phone_number__icontains=search)
                 )
             
             serializer = StudentSerializer(students, many=True)
@@ -273,10 +361,51 @@ class StudentsListView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+    def post(self, request):
+        """Create/update student profile from admin offence page modal"""
+        registration_number = (request.data.get('registration_number') or request.data.get('student_id') or '').strip()
+        name = (request.data.get('name') or '').strip()
+        phone_uuid = (request.data.get('uuid') or request.data.get('phone_uuid') or '').strip()
+        phone_number = (request.data.get('phone_number') or '').strip() or None
+        email = (request.data.get('email') or '').strip() or None
+
+        if not registration_number or not name or not phone_uuid:
+            return Response(
+                {'detail': 'registration_number, name and uuid are required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            student, created = Student.objects.update_or_create(
+                student_id=registration_number,
+                defaults={
+                    'name': name,
+                    'email': email,
+                    'phone_uuid': phone_uuid,
+                    'phone_number': phone_number,
+                    'is_active': True,
+                }
+            )
+            serializer = StudentSerializer(student)
+            return Response(
+                {
+                    'message': 'Student created successfully' if created else 'Student updated successfully',
+                    'student': serializer.data,
+                },
+                status=status.HTTP_201_CREATED if created else status.HTTP_200_OK
+            )
+        except IntegrityError:
+            return Response(
+                {'detail': 'UUID must be unique. This uuid is already used by another profile.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 class FacultyListView(APIView):
     """Fetch all faculty from safety system database"""
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdmin]
 
     def get(self, request):
         """Get faculty with optional filtering"""
@@ -288,7 +417,9 @@ class FacultyListView(APIView):
                 faculty = faculty.filter(
                     Q(faculty_id__icontains=search) |
                     Q(name__icontains=search) |
-                    Q(email__icontains=search)
+                    Q(email__icontains=search) |
+                    Q(phone_uuid__icontains=search) |
+                    Q(phone_number__icontains=search)
                 )
             
             serializer = FacultySerializer(faculty, many=True)
@@ -301,6 +432,57 @@ class FacultyListView(APIView):
                 {'error': str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+    def post(self, request):
+        """Create/update faculty profile from admin offence page modal"""
+        registration_number = (request.data.get('registration_number') or request.data.get('faculty_id') or '').strip()
+        name = (request.data.get('name') or '').strip()
+        phone_uuid = (request.data.get('uuid') or request.data.get('phone_uuid') or '').strip()
+        phone_number = (request.data.get('phone_number') or '').strip() or None
+        email = (request.data.get('email') or '').strip() or None
+
+        if not registration_number or not name or not phone_uuid:
+            return Response(
+                {'detail': 'registration_number, name and uuid are required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            faculty, created = Faculty.objects.update_or_create(
+                faculty_id=registration_number,
+                defaults={
+                    'name': name,
+                    'email': email,
+                    'phone_uuid': phone_uuid,
+                    'phone_number': phone_number,
+                    'is_active': True,
+                }
+            )
+            serializer = FacultySerializer(faculty)
+            return Response(
+                {
+                    'message': 'Faculty created successfully' if created else 'Faculty updated successfully',
+                    'faculty': serializer.data,
+                },
+                status=status.HTTP_201_CREATED if created else status.HTTP_200_OK
+            )
+        except IntegrityError:
+            return Response(
+                {'detail': 'UUID must be unique. This uuid is already used by another profile.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class FacultyDetailView(APIView):
+    permission_classes = [IsAdmin]
+
+    def delete(self, request, faculty_id):
+        deleted, _ = Faculty.objects.filter(id=faculty_id).delete()
+        if deleted == 0:
+            return Response({"detail": "Faculty not found"}, status=404)
+        return Response({"message": "Faculty deleted successfully"})
 
 
 class ViolationReportsView(APIView):

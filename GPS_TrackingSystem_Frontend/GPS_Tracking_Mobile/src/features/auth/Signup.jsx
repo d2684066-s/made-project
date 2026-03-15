@@ -5,7 +5,7 @@ import { Eye, EyeOff, Loader2, UserPlus, Bus, Truck } from 'lucide-react';
 
 // Demo accounts for testing
 const DEMO_ACCOUNTS = [
-    { role: 'student', name: 'Student Demo', phone: '9348069614', password: 'ds1', driver_type: null },
+    { role: 'student', name: 'Student Demo', phone: '9348069614', password: 'ds1', driver_type: null, email: 'student.demo@gcekjr.ac.in' },
     { role: 'driver', name: 'Bus Driver Demo', phone: '9348069615', password: 'ds1', driver_type: 'bus' },
     { role: 'driver', name: 'Ambulance Driver Demo 1', phone: '9348069616', password: 'ds1', driver_type: 'ambulance' },
     { role: 'driver', name: 'Ambulance Driver Demo 2', phone: '9348069617', password: 'ds1', driver_type: 'ambulance' },
@@ -23,6 +23,7 @@ const Signup = () => {
     const [formData, setFormData] = useState({
         name: '',
         registration_id: '',
+        email: '',
         phone: '',
         password: '',
         confirmPassword: '',
@@ -39,6 +40,7 @@ const Signup = () => {
         setFormData({
             name: account.name,
             registration_id: `REG_${account.phone}`,
+            email: account.role === 'student' ? (account.email || '') : '',
             phone: account.phone,
             password: account.password,
             confirmPassword: account.password,
@@ -67,6 +69,14 @@ const Signup = () => {
             return;
         }
 
+        if (
+            role === 'student' &&
+            !String(formData.email || '').trim().toLowerCase().endsWith('@gcekjr.ac.in')
+        ) {
+            setError('Use your official college email ');
+            return;
+        }
+
         setLoading(true);
         try {
             const payload = {
@@ -76,6 +86,10 @@ const Signup = () => {
                 password: formData.password,
                 role: role,
             };
+
+            if (role === 'student') {
+                payload.email = String(formData.email || '').trim();
+            }
 
             if (role === 'driver') {
                 payload.driver_type = formData.driver_type;
@@ -94,7 +108,7 @@ const Signup = () => {
     };
 
     return (
-        <div className={`min-h-[100dvh] flex flex-col items-center justify-center p-4 transition-colors duration-500 overflow-y-auto py-10 ${role === 'driver' ? 'bg-[#121214] text-white' : 'bg-[#F8F9FE] text-gray-900'}`}>
+        <div className={`min-h-[100dvh] flex flex-col items-center justify-center p-4 transition-colors duration-500 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent dark:scrollbar-thumb-slate-700 py-10 ${role === 'driver' ? 'bg-[#121214] text-white' : 'bg-[#F8F9FE] text-gray-900'}`}>
             <div className={`w-full max-w-md p-8 rounded-3xl shadow-xl transition-all duration-500 ${role === 'driver' ? 'bg-[#1C1C1E] border border-[#2A2A2D]' : 'bg-white border border-gray-100'}`}>
 
                 {/* Header */}
@@ -175,6 +189,22 @@ const Signup = () => {
                             />
                         </div>
                     )}
+
+                        {role === 'student' && (
+                            <div className="space-y-1.5">
+                                <label className={`text-sm font-medium ${role === 'driver' ? 'text-gray-300' : 'text-gray-700'}`}>Email Address</label>
+                                <input
+                                    type="email"
+                                    name="email"
+                                    value={formData.email}
+                                    onChange={handleChange}
+                                    placeholder="Enter college E-Mail "
+                                    required
+                                    className={`w-full h-11 px-4 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 transition-all text-sm ${role === 'driver' ? 'bg-[#121214] border border-[#3A3A3D] text-white placeholder-gray-500' : 'bg-gray-50 border border-gray-200 text-gray-900 focus:bg-white'
+                                        }`}
+                                />
+                            </div>
+                        )}
 
                     <div className="space-y-1.5">
                         <label className={`text-sm font-medium ${role === 'driver' ? 'text-gray-300' : 'text-gray-700'}`}>Phone Number</label>

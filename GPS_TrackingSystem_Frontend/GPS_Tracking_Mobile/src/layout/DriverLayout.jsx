@@ -1,17 +1,35 @@
-import { Outlet, NavLink, useNavigate } from 'react-router-dom';
+import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../core/auth.context';
-import { LayoutDashboard, PlayCircle, MapPin, Bell, HelpCircle, LogOut, User, Home, Truck, Navigation, X } from 'lucide-react';
+import { LayoutDashboard, PlayCircle, MapPin, Bell, HelpCircle, LogOut, User, Home, Truck, Navigation, Settings, X } from 'lucide-react';
 import ThemeToggle from '../shared/components/ThemeToggle';
 import { useState, useRef, useEffect } from 'react';
 import { driverApi } from '../lib/api';
 import { toast } from 'sonner';
 
+const API_URL = 'http://localhost:8000'; // backend URL
+
 export const DriverLayout = () => {
     const { user, token, logout } = useAuth();
     const navigate = useNavigate();
+    const location = useLocation();
+    const isActiveTripPage = location.pathname === '/driver/active-trip';
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [showVehicleModal, setShowVehicleModal] = useState(false);
     const [availableVehicles, setAvailableVehicles] = useState([]);
+
+    // Track pending requests for badge + notifications
+    const [pendingRequestCount, setPendingRequestCount] = useState(() => {
+        const count = Number(localStorage.getItem('gce_pending_request_count') || 0);
+        return Number.isNaN(count) ? 0 : count;
+    });
+    const pendingRequestIdsRef = useRef([]);
+    const notificationPermissionRef = useRef(
+        typeof Notification !== 'undefined' && Notification.permission === 'granted'
+    );
+
+    // Active booking for ambulance drivers
+    const [activeBooking, setActiveBooking] = useState(null);
+
     const menuRef = useRef(null);
 
     useEffect(() => {
@@ -23,6 +41,86 @@ export const DriverLayout = () => {
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
+
+    useEffect(() => {
+        // Load ids from cache so we can detect newly arrived requests
+        try {
+            pendingRequestIdsRef.current = JSON.parse(localStorage.getItem('gce_pending_request_ids') || '[]');
+        } catch (error) {
+            pendingRequestIdsRef.current = [];
+        }
+
+        const updateCountFromStorage = () => {
+            const storedCount = Number(localStorage.getItem('gce_pending_request_count') || 0);
+            setPendingRequestCount(Number.isNaN(storedCount) ? 0 : storedCount);
+        };
+
+        const handlePendingRequestsUpdated = (event) => {
+            const count = event?.detail?.count;
+            if (typeof count === 'number') {
+                setPendingRequestCount(count);
+            } else {
+                updateCountFromStorage();
+            }
+        };
+
+        window.addEventListener('pendingRequestsUpdated', handlePendingRequestsUpdated);
+
+        // Request notification permission. Important for showing system notifications.
+        if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+            Notification.requestPermission().then((permission) => {
+                notificationPermissionRef.current = permission === 'granted';
+            });
+        }
+
+        const intervalId = setInterval(async () => {
+            if (!token || user?.driver_type !== 'ambulance') return;
+
+            try {
+                const response = await driverApi.getPendingBookings(token);
+                const bookings = response.data?.bookings || [];
+                const ids = bookings.map((b) => b.id);
+
+                const previousIds = pendingRequestIdsRef.current || [];
+                const newlyAdded = ids.filter((id) => !previousIds.includes(id));
+
+                if (newlyAdded.length > 0 && notificationPermissionRef.current) {
+                    const total = ids.length;
+                    const notification = new Notification('New Ambulance Request', {
+                        body: `You have ${total} pending request${total === 1 ? '' : 's'}. Tap to view.`,
+                        tag: 'gce-ambulance-requests',
+                        renotify: true,
+                        silent: false,
+                        icon: '/favicon.ico'
+                    });
+                    notification.onclick = () => {
+                        window.focus();
+                        window.location.href = '/driver/pending-requests';
+                    };
+                }
+
+                pendingRequestIdsRef.current = ids;
+                localStorage.setItem('gce_pending_request_count', String(ids.length));
+                localStorage.setItem('gce_pending_request_ids', JSON.stringify(ids));
+                setPendingRequestCount(ids.length);
+                window.dispatchEvent(new CustomEvent('pendingRequestsUpdated', { detail: { count: ids.length } }));
+            } catch (error) {
+                // If offline / cannot reach backend, keep the cached count.
+                const cachedCount = Number(localStorage.getItem('gce_pending_request_count') || 0);
+                setPendingRequestCount(Number.isNaN(cachedCount) ? 0 : cachedCount);
+            }
+        }, 15000);
+
+        // Fetch active booking for ambulance drivers
+        if (user?.driver_type === 'ambulance') {
+            fetchActiveBooking();
+        }
+
+        return () => {
+            window.removeEventListener('pendingRequestsUpdated', handlePendingRequestsUpdated);
+            clearInterval(intervalId);
+        };
+    }, [token, user?.driver_type]);
 
     const navItems = [
         { name: 'Dashboard', path: '/driver/dashboard', icon: LayoutDashboard, mobileIcon: Home },
@@ -48,6 +146,26 @@ export const DriverLayout = () => {
         } catch (error) {
             console.error('Failed to fetch available vehicles:', error);
             toast.error('Failed to load available vehicles');
+        }
+    };
+
+    const fetchActiveBooking = async () => {
+        if (!token || user?.driver_type !== 'ambulance') return;
+
+        try {
+            const response = await fetch(`${API_URL}/driver/current-booking/`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                setActiveBooking(data.booking);
+            }
+        } catch (error) {
+            console.error('Failed to fetch active booking:', error);
         }
     };
 
@@ -79,6 +197,8 @@ export const DriverLayout = () => {
                 <nav className="flex-1 px-4 space-y-1.5 mt-4">
                     {navItems.map((item) => {
                         const Icon = item.icon;
+                        const isRequestsItem = item.name === 'Requests';
+                        const showBadge = isRequestsItem && pendingRequestCount > 0;
                         return (
                             <NavLink
                                 key={item.name}
@@ -90,7 +210,12 @@ export const DriverLayout = () => {
                                     }`
                                 }
                             >
-                                <Icon size={18} />
+                                <div className="relative">
+                                    <Icon size={18} />
+                                    {showBadge && (
+                                        <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-red-500 animate-pulse" />
+                                    )}
+                                </div>
                                 {item.name}
                             </NavLink>
                         );
@@ -189,7 +314,7 @@ export const DriverLayout = () => {
                     </div>
                 </header>
 
-                <main className="p-4 md:p-8 flex-1 max-w-7xl mx-auto w-full pb-20 md:pb-8 overflow-y-auto h-[calc(100vh-180px)] md:h-auto">
+                <main className="p-4 md:p-8 flex-1 max-w-7xl mx-auto w-full pb-20 md:pb-8">
                     <Outlet />
                 </main>
 
@@ -198,6 +323,9 @@ export const DriverLayout = () => {
                     <div className="flex justify-around items-center py-2 px-4">
                         {navItems.map((item) => {
                             const Icon = item.mobileIcon;
+                            const isRequestsItem = item.name === 'Requests';
+                            const showBadge = isRequestsItem && pendingRequestCount > 0;
+
                             // Special handling for Assignment (vehicle) item
                             if (item.name === 'Assignment') {
                                 return (
@@ -223,7 +351,12 @@ export const DriverLayout = () => {
                                         }`
                                     }
                                 >
-                                    <Icon size={20} className="mb-1" />
+                                    <div className="relative">
+                                        <Icon size={20} className="mb-1" />
+                                        {showBadge && (
+                                            <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-red-500 animate-pulse" />
+                                        )}
+                                    </div>
                                     <span className="text-[10px]">{item.name === 'Dashboard' ? 'Home' : item.name === 'Assignment' ? 'Vehicle' : item.name === 'Active' ? 'Trip' : item.name}</span>
                                 </NavLink>
                             );
@@ -243,7 +376,6 @@ export const DriverLayout = () => {
                         </NavLink>
                     </div>
                 </nav>
-
                 {/* Vehicle Selection Modal */}
                 {showVehicleModal && (
                     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">

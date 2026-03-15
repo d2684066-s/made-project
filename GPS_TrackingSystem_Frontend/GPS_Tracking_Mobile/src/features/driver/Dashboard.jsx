@@ -1,14 +1,24 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../core/auth.context';
 import { driverApi } from '../../lib/api';
 import { toast } from 'sonner';
 import axios from 'axios';
-import { Loader2, Power, Navigation, Phone, ChevronRight, Truck, Siren, Activity, Clock, RefreshCw, X, MapPin } from 'lucide-react';
+import { Loader2, Power, Navigation, Phone, ChevronRight, Truck, Siren, Activity, Clock, RefreshCw, X, MapPin, MapPinOff } from 'lucide-react';
 import NavigationMap from '../../components/NavigationMap';
 import LocationServiceCheck from '../../components/LocationServiceCheck';
 
 const API_URL = 'http://localhost:8000'; // backend URL
+
+// Keonjhar district bounding box (must match backend geofence/kendujhar_zone.py)
+const KEONJHAR_BOUNDS = { north: 22.20, south: 21.40, east: 86.40, west: 85.30 };
+const isInsideKeonjhar = (lat, lng) =>
+    lat >= KEONJHAR_BOUNDS.south && lat <= KEONJHAR_BOUNDS.north &&
+    lng >= KEONJHAR_BOUNDS.west && lng <= KEONJHAR_BOUNDS.east;
+const getDeviceLocation = () => new Promise((resolve, reject) => {
+    if (!navigator.geolocation) { reject(new Error('UNAVAILABLE')); return; }
+    navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 8000, maximumAge: 30000 });
+});
 
 const Dashboard = () => {
     const { user, token, logout } = useAuth();
@@ -28,8 +38,220 @@ const Dashboard = () => {
     const [driverLocation, setDriverLocation] = useState(null);
     const [showNavigationMap, setShowNavigationMap] = useState(false);
     const [showLocationPermissionCheck, setShowLocationPermissionCheck] = useState(false);
+    const [gpsWatcherId, setGpsWatcherId] = useState(null);
+    const [isOutOfStation, setIsOutOfStation] = useState(false);
+    const [updatingOutOfStation, setUpdatingOutOfStation] = useState(false);
+    const [showKeonjharReloginPopup, setShowKeonjharReloginPopup] = useState(false);
+    const [keonjharZoneMessage, setKeonjharZoneMessage] = useState('');
+
+    const gpsWatcherRef = useRef(null);
+    const gpsPacketIntervalRef = useRef(null);
+    const latestGpsCoordsRef = useRef(null);
+    const gpsTransientErrorCountRef = useRef(0);
+    const gpsWaitingForFixLoggedRef = useRef(false);
+    const zoneViolationTriggeredRef = useRef(false);
 
     const isBusDriver = user?.driver_type === 'bus';
+
+    const resolveVehicleId = (vehicleLike) => {
+        if (!vehicleLike) return null;
+        if (typeof vehicleLike === 'string') return vehicleLike;
+        return vehicleLike.id || vehicleLike.vehicle || vehicleLike.vehicle_id || null;
+    };
+
+    const handleKeonjharZoneViolation = (message) => {
+        if (zoneViolationTriggeredRef.current) {
+            return;
+        }
+
+        zoneViolationTriggeredRef.current = true;
+        stopBusGPSTracking();
+        setKeonjharZoneMessage(
+            message || 'Move to Keonjhar area to continue bus tracking. Re-login is required.'
+        );
+        setShowKeonjharReloginPopup(true);
+        toast.error('Move to Keonjhar area. Re-login is required.');
+    };
+
+    const handleKeonjharRelogin = async () => {
+        const selectedVehicleId = resolveVehicleId(selectedVehicle);
+
+        if (activeTrip?.id) {
+            try {
+                await driverApi.endTrip(activeTrip.id, token);
+            } catch (error) {
+                console.warn('Failed to end trip during Keonjhar relogin:', error);
+            }
+        }
+
+        if (selectedVehicleId) {
+            try {
+                await driverApi.releaseVehicle(selectedVehicleId, token);
+            } catch (error) {
+                console.warn('Failed to release vehicle during Keonjhar relogin:', error);
+            }
+        }
+
+        const type = isBusDriver ? 'bus' : 'ambulance';
+        localStorage.removeItem(`${type}_assigned_vehicle_${user?.id}`);
+        localStorage.removeItem('location_permission_granted');
+
+        setShowKeonjharReloginPopup(false);
+        setActiveTrip(null);
+        setSelectedVehicle(null);
+        setIsOutOfStation(false);
+
+        logout();
+        navigate('/login', { replace: true });
+    };
+
+    const stopBusGPSTracking = () => {
+        if (gpsPacketIntervalRef.current !== null) {
+            clearInterval(gpsPacketIntervalRef.current);
+            gpsPacketIntervalRef.current = null;
+        }
+
+        if (gpsWatcherRef.current === null && gpsWatcherId !== null && navigator.geolocation) {
+            navigator.geolocation.clearWatch(gpsWatcherId);
+        }
+
+        if (gpsWatcherRef.current !== null) {
+            navigator.geolocation.clearWatch(gpsWatcherRef.current);
+            gpsWatcherRef.current = null;
+        }
+
+        latestGpsCoordsRef.current = null;
+        gpsTransientErrorCountRef.current = 0;
+        gpsWaitingForFixLoggedRef.current = false;
+        setGpsWatcherId(null);
+    };
+
+    const pushBusGPSPacket = async (vehicleId, coords) => {
+        if (!vehicleId || !coords) return;
+
+        try {
+            await driverApi.updateVehicleLocation(
+                vehicleId,
+                coords.lat,
+                coords.lng,
+                coords.speed || 0
+            );
+            console.log('GPS Packet Sent:', coords.lat, coords.lng);
+        } catch (error) {
+            const backendCode = error?.response?.data?.code;
+            const errorMsg =
+                error?.response?.data?.detail ||
+                error?.response?.data?.error ||
+                error?.message ||
+                'Unknown error';
+
+            const normalizedMsg = String(errorMsg).toLowerCase();
+            if (
+                backendCode === 'OUTSIDE_KEONJHAR' ||
+                normalizedMsg.includes('outside kendujhar permitted zone')
+            ) {
+                handleKeonjharZoneViolation(
+                    'Move to Keonjhar area. Bus GPS packets are blocked outside Kendujhar zone.'
+                );
+                return;
+            }
+
+            console.error('Failed to send bus GPS packet:', errorMsg);
+        }
+    };
+
+    const startBusGPSTracking = (vehicleId) => {
+        if (!isBusDriver || !vehicleId) return;
+
+        zoneViolationTriggeredRef.current = false;
+        setShowKeonjharReloginPopup(false);
+
+        if (!navigator.geolocation) {
+            toast.error('Geolocation is not supported on this device');
+            return;
+        }
+
+        // Prevent duplicate watchers/intervals.
+        if (gpsWatcherRef.current !== null || gpsWatcherId !== null) {
+            return;
+        }
+
+        // Try to seed from last known location so backend gets a packet quickly.
+        navigator.geolocation.getCurrentPosition(
+            async (position) => {
+                const lat = position.coords.latitude;
+                const lng = position.coords.longitude;
+                const speed = position.coords.speed || 0;
+
+                latestGpsCoordsRef.current = { lat, lng, speed };
+                gpsWaitingForFixLoggedRef.current = false;
+                setDriverLocation({ lat, lng });
+                await pushBusGPSPacket(vehicleId, { lat, lng, speed });
+            },
+            (error) => {
+                if (error.code === 1) {
+                    console.error('Bus GPS permission denied:', error);
+                    return;
+                }
+                console.warn('Initial GPS fix pending:', error.message);
+            },
+            {
+                enableHighAccuracy: false,
+                maximumAge: 15000,
+                timeout: 20000,
+            }
+        );
+
+        const watchId = navigator.geolocation.watchPosition(
+            (position) => {
+                const lat = position.coords.latitude;
+                const lng = position.coords.longitude;
+                const speed = position.coords.speed || 0;
+
+                gpsTransientErrorCountRef.current = 0;
+                gpsWaitingForFixLoggedRef.current = false;
+                latestGpsCoordsRef.current = { lat, lng, speed };
+                setDriverLocation({ lat, lng });
+            },
+            (error) => {
+                if (error.code === 1) {
+                    console.error('Bus GPS watcher permission denied:', error);
+                    return;
+                }
+
+                if (error.code === 2 || error.code === 3) {
+                    gpsTransientErrorCountRef.current += 1;
+                    if (gpsTransientErrorCountRef.current % 3 === 1) {
+                        console.warn('Bus GPS temporary issue:', error.message);
+                    }
+                    return;
+                }
+
+                console.error('Bus GPS watcher error:', error);
+            },
+            {
+                enableHighAccuracy: false,
+                maximumAge: 10000,
+                timeout: 20000,
+            }
+        );
+
+        gpsWatcherRef.current = watchId;
+        setGpsWatcherId(watchId);
+
+        gpsPacketIntervalRef.current = setInterval(async () => {
+            const latest = latestGpsCoordsRef.current;
+            if (!latest) {
+                if (!gpsWaitingForFixLoggedRef.current) {
+                    console.warn('Waiting for first GPS fix before sending packets');
+                    gpsWaitingForFixLoggedRef.current = true;
+                }
+                return;
+            }
+
+            await pushBusGPSPacket(vehicleId, latest);
+        }, 10000);
+    };
 
     const handleRefreshDashboard = async () => {
         setLoading(true);
@@ -93,6 +315,18 @@ const Dashboard = () => {
             const response = await driverApi.getAvailableVehicles(type, token);
             const vehiclesList = response.data.vehicles || [];
             setVehicles(vehiclesList);
+
+            const selectedVehicleId = resolveVehicleId(selectedVehicle);
+            if (selectedVehicleId) {
+                const selectedVehicleFromList = vehiclesList.find(v => v.id === selectedVehicleId);
+                if (selectedVehicleFromList) {
+                    setSelectedVehicle((prev) => ({
+                        ...(prev || {}),
+                        ...selectedVehicleFromList,
+                    }));
+                    setIsOutOfStation(Boolean(selectedVehicleFromList.is_out_of_station));
+                }
+            }
             
             // Check if any vehicle is currently assigned to this driver
             const assignedVehicle = vehiclesList.find(v => v.assigned_to);
@@ -103,9 +337,11 @@ const Dashboard = () => {
                 const restoredVehicle = vehiclesList.find(v => v.id === lastAssignedId);
                 if (restoredVehicle) {
                     setSelectedVehicle(restoredVehicle);
+                    setIsOutOfStation(Boolean(restoredVehicle.is_out_of_station));
                 }
             } else if (assignedVehicle && !selectedVehicle) {
                 setSelectedVehicle(assignedVehicle);
+                setIsOutOfStation(Boolean(assignedVehicle.is_out_of_station));
                 localStorage.setItem(`${type}_assigned_vehicle_${user?.id}`, assignedVehicle.id);
             }
         } catch (error) {
@@ -117,8 +353,18 @@ const Dashboard = () => {
         try {
             const response = await driverApi.getActiveTrip(token);
             if (response.data.trip) {
-                setActiveTrip(response.data.trip);
-                setSelectedVehicle(response.data.trip.vehicle_data || { vehicle_number: response.data.trip.vehicle_id });
+                const trip = response.data.trip;
+                const tripVehicleId = trip.vehicle || trip.vehicle_id || null;
+                setActiveTrip(trip);
+                setSelectedVehicle((prev) => ({
+                    ...(prev || {}),
+                    id: tripVehicleId || prev?.id,
+                    vehicle: tripVehicleId || prev?.vehicle,
+                    vehicle_id: tripVehicleId || prev?.vehicle_id,
+                    vehicle_number: trip.vehicle_number || prev?.vehicle_number || 'BUS',
+                }));
+            } else {
+                setActiveTrip(null);
             }
         } catch (error) { }
     };
@@ -132,6 +378,56 @@ const Dashboard = () => {
         } catch (error) { }
     };
 
+    const handleOutOfStationToggle = async () => {
+        if (!isBusDriver) {
+            return;
+        }
+
+        const selectedVehicleId = resolveVehicleId(selectedVehicle);
+        if (!selectedVehicleId) {
+            toast.error('Please select a bus first');
+            return;
+        }
+
+        const nextValue = !isOutOfStation;
+        setUpdatingOutOfStation(true);
+
+        try {
+            await driverApi.markOutOfStation(selectedVehicleId, nextValue, token);
+
+            setIsOutOfStation(nextValue);
+            setSelectedVehicle((prev) => {
+                if (!prev) return prev;
+                return {
+                    ...prev,
+                    is_out_of_station: nextValue,
+                };
+            });
+            setVehicles((prevVehicles) =>
+                prevVehicles.map((vehicle) =>
+                    vehicle.id === selectedVehicleId
+                        ? { ...vehicle, is_out_of_station: nextValue }
+                        : vehicle
+                )
+            );
+
+            if (nextValue) {
+                toast.success('Bus marked out of station. Student ETA is paused.');
+            } else {
+                toast.success('Bus marked in station. Student ETA is enabled.');
+            }
+        } catch (error) {
+            const message =
+                error?.response?.data?.detail ||
+                error?.response?.data?.error ||
+                error?.message ||
+                'Failed to update bus station status';
+            toast.error(message);
+        } finally {
+            setUpdatingOutOfStation(false);
+        }
+    };
+
     const handleEngineOK = async () => {
         if (!isOnline) {
             toast.error('Please turn on shift status first');
@@ -143,7 +439,78 @@ const Dashboard = () => {
             return;
         }
 
+        // Bus drivers must be inside Keonjhar zone before starting a NEW trip.
+        // Only block on hard PERMISSION_DENIED (code 1).
+        // POSITION_UNAVAILABLE (code 2) or TIMEOUT (code 3) means permission is
+        // granted but the device can't get a fix right now — skip the zone check
+        // and let the trip start; the backend geofence will still block bad GPS packets.
+        if (isBusDriver && !activeTrip) {
+            try {
+                const pos = await getDeviceLocation();
+                const { latitude, longitude } = pos.coords;
+                if (!isInsideKeonjhar(latitude, longitude)) {
+                    toast.error(
+                        'You are outside Keonjhar zone. Drive to the Keonjhar area before starting the trip.',
+                        { duration: 5000 }
+                    );
+                    return;
+                }
+            } catch (err) {
+                const code = err?.code;
+                if (code === 1) {
+                    // PERMISSION_DENIED — hard stop
+                    toast.error(
+                        'Location permission denied. Allow location in browser settings and try again.',
+                        { duration: 5000 }
+                    );
+                    return;
+                }
+                // POSITION_UNAVAILABLE (2) or TIMEOUT (3) — device can't get fix right now.
+                // Warn but allow the trip; backend geofence will guard GPS packets.
+                toast.warning(
+                    'Could not verify your location. Proceeding — the backend will reject GPS packets if you are outside Keonjhar.',
+                    { duration: 4000 }
+                );
+            }
+        }
+
         if (selectedVehicle) {
+            const selectedVehicleId = resolveVehicleId(selectedVehicle);
+
+            if (isBusDriver) {
+                if (!selectedVehicleId) {
+                    toast.error('Selected vehicle ID not found');
+                    return;
+                }
+
+                if (activeTrip) {
+                    startBusGPSTracking(selectedVehicleId);
+                    toast.info('Trip already active. GPS tracking running.');
+                    return;
+                }
+
+                setAssigningVehicle(true);
+                try {
+                    const tripResponse = await driverApi.startTrip(selectedVehicleId, token);
+                    setActiveTrip(tripResponse.data);
+                    startBusGPSTracking(selectedVehicleId);
+                    toast.success('Engine OK. Trip started and GPS tracking active.');
+                } catch (error) {
+                    const errorMsg = error.response?.data?.detail || error.message;
+                    const normalizedMessage = String(errorMsg || '').toLowerCase();
+                    if (normalizedMessage.includes('already have an active trip')) {
+                        await fetchActiveTrip();
+                        startBusGPSTracking(selectedVehicleId);
+                        toast.info('Trip already active. GPS tracking resumed.');
+                    } else {
+                        toast.error('Failed to start trip: ' + errorMsg);
+                    }
+                } finally {
+                    setAssigningVehicle(false);
+                }
+                return;
+            }
+
             toast.info('Vehicle already assigned');
             return;
         }
@@ -164,10 +531,15 @@ const Dashboard = () => {
             // Store in localStorage to persist on refresh
             const type = isBusDriver ? 'bus' : 'ambulance';
             localStorage.setItem(`${type}_assigned_vehicle_${user?.id}`, vehicleToAssign.id);
-            
-            toast.success(`${isBusDriver ? 'Bus' : 'Ambulance'} assigned successfully!`);
-            
-            // TODO: API call to notify public/student app about bus assignment
+
+            if (isBusDriver) {
+                const tripResponse = await driverApi.startTrip(vehicleToAssign.id, token);
+                setActiveTrip(tripResponse.data);
+                startBusGPSTracking(vehicleToAssign.id);
+                toast.success('Bus assigned. Trip started and GPS tracking active.');
+            } else {
+                toast.success('Ambulance assigned successfully!');
+            }
             
         } catch (error) {
             console.error('Failed to assign vehicle:', error);
@@ -182,12 +554,17 @@ const Dashboard = () => {
         if (!online) {
             // Going offline - stop GPS, log timestamp, auto-logout
             try {
+                stopBusGPSTracking();
+
                 if (activeTrip) {
                     await driverApi.endTrip(activeTrip.id, token);
                     toast.info('Trip ended due to shift completion');
                 }
                 if (selectedVehicle) {
-                    await driverApi.releaseVehicle(selectedVehicle.id, token);
+                    const selectedVehicleId = resolveVehicleId(selectedVehicle);
+                    if (selectedVehicleId) {
+                        await driverApi.releaseVehicle(selectedVehicleId, token);
+                    }
                     toast.info('Vehicle released');
                     
                     // Clear from localStorage
@@ -198,6 +575,9 @@ const Dashboard = () => {
                 setSelectedVehicle(null);
                 setActiveTrip(null);
                 setCurrentBooking(null);
+                setIsOutOfStation(false);
+                setShowKeonjharReloginPopup(false);
+                zoneViolationTriggeredRef.current = false;
                 
                 // Auto logout after a short delay
                 setTimeout(() => {
@@ -244,6 +624,7 @@ const Dashboard = () => {
             
             // Update UI
             setSelectedVehicle(vehicleToAssign);
+            setIsOutOfStation(Boolean(vehicleToAssign.is_out_of_station));
             
             // Store in localStorage
             const type = isBusDriver ? 'bus' : 'ambulance';
@@ -368,6 +749,7 @@ const Dashboard = () => {
         try {
             const response = await driverApi.endTrip(activeTrip.id, token);
             console.log('End trip response:', response);
+            stopBusGPSTracking();
             
             setActiveTrip(null);
             setCurrentBooking(null);
@@ -427,6 +809,41 @@ const Dashboard = () => {
             fetchAvailableVehicles();
         }
     }, [showVehicleChange]);
+
+    useEffect(() => {
+        const selectedVehicleId = resolveVehicleId(selectedVehicle);
+        if (!selectedVehicleId) {
+            setIsOutOfStation(false);
+            return;
+        }
+
+        const selectedFromVehicles = vehicles.find(v => v.id === selectedVehicleId);
+        if (selectedFromVehicles) {
+            setIsOutOfStation(Boolean(selectedFromVehicles.is_out_of_station));
+            return;
+        }
+
+        if (selectedVehicle && typeof selectedVehicle === 'object') {
+            setIsOutOfStation(Boolean(selectedVehicle.is_out_of_station));
+        }
+    }, [vehicles, selectedVehicle]);
+
+    useEffect(() => {
+        if (!isBusDriver) return;
+
+        const activeVehicleId = resolveVehicleId(activeTrip) || resolveVehicleId(selectedVehicle);
+        if (activeTrip && activeVehicleId) {
+            startBusGPSTracking(activeVehicleId);
+        } else if (!activeTrip) {
+            stopBusGPSTracking();
+        }
+    }, [activeTrip, isBusDriver, selectedVehicle]);
+
+    useEffect(() => {
+        return () => {
+            stopBusGPSTracking();
+        };
+    }, []);
 
     useEffect(() => {
         if (!isBusDriver && token) {
@@ -490,7 +907,7 @@ const Dashboard = () => {
     }
 
     return (
-        <div className="space-y-8 animate-in fade-in duration-500 max-w-4xl mx-auto">
+        <div className="space-y-8 animate-in fade-in duration-500 max-w-4xl mx-auto overflow-y-auto scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent dark:scrollbar-thumb-slate-700 min-h-screen px-4">
             {/* Status & Shift Info */}
             <div className="flex flex-col md:flex-row gap-4">
                 <div className="flex-1 bg-white dark:bg-slate-900/50 p-6 rounded-[2rem] border border-slate-100 dark:border-slate-800 shadow-sm flex items-center justify-between">
@@ -544,7 +961,7 @@ const Dashboard = () => {
                     </div>
                 </div>
 
-                <div className="relative overflow-hidden rounded-[2.5rem] bg-slate-900 border border-slate-800 shadow-2xl group transition-all hover:scale-[1.01] active:scale-[0.99] cursor-pointer shadow-blue-500/10 h-52">
+                <div className="relative overflow-hidden rounded-[2.5rem] bg-slate-900 border border-slate-800 shadow-2xl group transition-all hover:scale-[1.01] active:scale-[0.99] cursor-pointer shadow-blue-500/10 h-60">
                     <div className="absolute inset-0 bg-gradient-to-br from-[#137fec]/20 via-transparent to-black/60 z-10"></div>
                     <div className="absolute top-0 right-0 w-64 h-64 bg-[#137fec]/5 rounded-full blur-[80px] -mr-32 -mt-32"></div>
 
@@ -560,6 +977,11 @@ const Dashboard = () => {
                             <p className="text-white/40 font-mono text-sm tracking-[0.2em] mt-2">
                                 {isBusDriver ? 'UNIT-TRANS-GCE' : 'EMERGENCY-UNIT-1'}
                             </p>
+                            {isBusDriver && selectedVehicle && (
+                                <p className={`mt-2 text-[10px] font-black uppercase tracking-[0.2em] ${isOutOfStation ? 'text-amber-300' : 'text-green-300'}`}>
+                                    {isOutOfStation ? 'Out Of Station (ETA Hidden)' : 'In Station (ETA Live)'}
+                                </p>
+                            )}
                         </div>
 
                         <div className="flex items-center gap-4">
@@ -577,6 +999,23 @@ const Dashboard = () => {
                                     {assigningVehicle ? 'Assigning...' : 'Engine OK'}
                                 </span>
                             </button>
+
+                            {isBusDriver && selectedVehicle && (
+                                <button
+                                    onClick={handleOutOfStationToggle}
+                                    disabled={updatingOutOfStation}
+                                    className="bg-amber-500/15 backdrop-blur-md px-4 py-2 rounded-xl flex items-center gap-2 border border-amber-400/30 hover:bg-amber-500/25 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {updatingOutOfStation ? (
+                                        <RefreshCw size={14} className="text-amber-200 animate-spin" />
+                                    ) : (
+                                        <MapPinOff size={14} className="text-amber-200" />
+                                    )}
+                                    <span className="text-xs font-bold text-amber-100 uppercase whitespace-nowrap">
+                                        {isOutOfStation ? 'Mark In Station' : 'Out Station'}
+                                    </span>
+                                </button>
+                            )}
                         </div>
                     </div>
 
@@ -816,6 +1255,31 @@ const Dashboard = () => {
                                 ))
                             )}
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {showKeonjharReloginPopup && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+                    <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 w-full max-w-md border border-red-200 dark:border-red-800 shadow-2xl">
+                        <div className="mb-4">
+                            <p className="text-[10px] font-black uppercase tracking-[0.25em] text-red-500 mb-2">
+                                Location Restricted
+                            </p>
+                            <h3 className="text-xl font-black text-slate-900 dark:text-white mb-2">
+                                Move To Keonjhar
+                            </h3>
+                            <p className="text-sm text-slate-600 dark:text-slate-300">
+                                {keonjharZoneMessage || 'Your bus GPS is outside Kendujhar permitted area. Move back to Keonjhar and re-login to continue.'}
+                            </p>
+                        </div>
+
+                        <button
+                            onClick={handleKeonjharRelogin}
+                            className="w-full bg-red-500 hover:bg-red-600 text-white py-3 rounded-2xl font-bold transition-all"
+                        >
+                            Re-Login
+                        </button>
                     </div>
                 </div>
             )}

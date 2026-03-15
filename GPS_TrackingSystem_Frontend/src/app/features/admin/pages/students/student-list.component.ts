@@ -41,14 +41,20 @@ export class StudentListComponent implements OnInit {
     this.loadStudents();
   }
 
-  deleteStudent(id: string) {
-    if (confirm('Delete student?')) {
-      this.api.deleteStudent(id).subscribe({
-        next: () => {
-          this.loadStudents();
-        },
-        error: (err) => console.error('delete error', err)
-      });
+  deleteUser(id: string) {
+    if (!confirm('Are you sure you want to delete this user?')) {
+      return;
     }
+
+    this.api.deleteUser(id).subscribe({
+      next: () => {
+        alert('User deleted');
+        this.loadStudents();
+      },
+      error: (err) => {
+        console.error('delete error', err);
+        alert('Delete failed');
+      }
+    });
   }
 }
