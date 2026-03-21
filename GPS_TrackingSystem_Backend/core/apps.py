@@ -24,4 +24,13 @@ class CoreConfig(AppConfig):
     name = 'core'
 
     def ready(self):
+        # Import signals when app is ready
+        import core.signals
+
+
+class CoreConfig(AppConfig):
+    default_auto_field = 'django.db.models.BigAutoField'
+    name = 'core'
+
+    def ready(self):
         post_migrate.connect(seed_admin, sender=self)

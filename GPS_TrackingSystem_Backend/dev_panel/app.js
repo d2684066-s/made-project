@@ -13,6 +13,7 @@ const state = {
     authToken: null,
     pendingAdmins: [],
     approvedAdmins: [],
+    adminCreationRequests: [],
     studentOffences: [],
     facultyOffences: []
 };
@@ -262,6 +263,36 @@ async function loadAdminRequests() {
         renderPendingAdmins();
         renderApprovedAdmins();
     }
+    
+    try {
+        // Fetch admin creation requests from Django admin panel
+        const headers = {
+            'Content-Type': 'application/json'
+        };
+        
+        if (state.authToken) {
+            headers['Authorization'] = `Bearer ${state.authToken}`;
+        }
+
+        const creationResponse = await fetch(`${API_URL}/admin/admin-creation-requests/`, {
+            method: 'GET',
+            headers: headers
+        });
+
+        if (creationResponse.ok) {
+            const creationData = await creationResponse.json();
+            state.adminCreationRequests = creationData.admin_creation_requests || [];
+            console.log('Loaded admin creation requests:', state.adminCreationRequests);
+            renderAdminCreationRequests();
+        } else {
+            console.warn('Unable to load admin creation requests:', creationResponse.status);
+            state.adminCreationRequests = [];
+        }
+    } catch (err) {
+        console.error('Error fetching admin creation requests:', err);
+        state.adminCreationRequests = [];
+    }
+    
     // Fetch offence data
     try {
         const headers = {
@@ -391,6 +422,114 @@ function renderApprovedAdmins() {
     });
     
     console.log('✅ Admin rendering complete');
+}
+
+function renderAdminCreationRequests() {
+    console.log('🎨 Rendering admin creation requests:', state.adminCreationRequests.length);
+    
+    const tbody = document.getElementById('admin-creation-requests-body');
+    const emptyState = document.getElementById('admin-creation-empty-state');
+    const table = document.getElementById('admin-creation-requests-table');
+
+    // Create elements if they don't exist in the current tab
+    if (!tbody || !table) {
+        console.log('⚠️  Admin creation requests table not found in current tab');
+        return;
+    }
+
+    tbody.innerHTML = '';
+
+    if (state.adminCreationRequests.length === 0) {
+        console.log('📭 No admin creation requests');
+        if (table) table.style.display = 'none';
+        if (emptyState) emptyState.style.display = 'flex';
+        return;
+    }
+
+    console.log('📊 Displaying', state.adminCreationRequests.length, 'admin creation requests');
+    if (table) table.style.display = 'table';
+    if (emptyState) emptyState.style.display = 'none';
+
+    state.adminCreationRequests.forEach((request) => {
+        console.log(`👤 Creation Request:`, request.name, request.email);
+        const row = document.createElement('tr');
+        const statusBadge = request.is_notified 
+            ? '<span class="status-badge notified">Notified</span>' 
+            : '<span class="status-badge pending">Pending Notification</span>';
+        
+        row.innerHTML = `
+            <td>${request.name}</td>
+            <td>${request.email}</td>
+            <td>${request.registration_id || 'N/A'}</td>
+            <td>${formatDate(request.created_at)}</td>
+            <td>${statusBadge}</td>
+            <td>
+                <button class="btn-action" onclick="notifyAdminCreation('${request.id}')" title="Mark as notified">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                    </svg>
+                </button>
+                <button class="btn-delete" onclick="deleteAdminCreationRequest('${request.id}')" title="Delete">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="3 6 5 6 21 6"></polyline>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    </svg>
+                </button>
+            </td>
+        `;
+        tbody.appendChild(row);
+    });
+    
+    console.log('✅ Admin creation requests rendering complete');
+}
+
+async function notifyAdminCreation(requestId) {
+    try {
+        const response = await fetch(`${API_URL}/admin/admin-creation-requests/${requestId}/`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                ...(state.authToken ? { 'Authorization': `Bearer ${state.authToken}` } : {})
+            },
+            body: JSON.stringify({ is_notified: true })
+        });
+
+        if (response.ok) {
+            showToast('Admin creation marked as notified', 'success');
+            loadAdminRequests(); // Reload to update the list
+        } else {
+            showToast('Failed to update admin creation request', 'error');
+        }
+    } catch (error) {
+        console.error('Error notifying admin creation:', error);
+        showToast('Error updating admin creation request', 'error');
+    }
+}
+
+async function deleteAdminCreationRequest(requestId) {
+    if (!confirm('Are you sure you want to delete this admin creation request?')) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_URL}/admin/admin-creation-requests/${requestId}/`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+                ...(state.authToken ? { 'Authorization': `Bearer ${state.authToken}` } : {})
+            }
+        });
+
+        if (response.ok) {
+            showToast('Admin creation request deleted', 'success');
+            loadAdminRequests(); // Reload to update the list
+        } else {
+            showToast('Failed to delete admin creation request', 'error');
+        }
+    } catch (error) {
+        console.error('Error deleting admin creation request:', error);
+        showToast('Error deleting admin creation request', 'error');
+    }
 }
 
 async function approveAdmin(index) {

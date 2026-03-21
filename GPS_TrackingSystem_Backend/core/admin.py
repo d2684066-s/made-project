@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from .models import User, Vehicle, Trip, Booking, Issue, Offence, RFIDDevice, Notification
+from .models import User, Vehicle, Trip, Booking, Issue, Offence, RFIDDevice, Notification, AdminCreationRequest
 
 
 @admin.register(User)
@@ -81,3 +81,12 @@ class NotificationAdmin(admin.ModelAdmin):
     list_filter = ('notification_type', 'is_read', 'created_at')
     search_fields = ('student_phone', 'message')
     readonly_fields = ('created_at',)
+
+
+@admin.register(AdminCreationRequest)
+class AdminCreationRequestAdmin(admin.ModelAdmin):
+    list_display = ('name', 'email', 'registration_id', 'is_notified', 'created_at')
+    list_filter = ('is_notified', 'created_at')
+    search_fields = ('name', 'email', 'registration_id')
+    readonly_fields = ('created_at', 'name', 'email', 'registration_id', 'user')
+    ordering = ('-created_at',)

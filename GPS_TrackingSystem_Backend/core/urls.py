@@ -51,6 +51,8 @@ from .views import (
     AdminDetailView,
     PendingAdminListCreateView,
     PendingAdminDetailView,
+    AdminCreationRequestListView,
+    AdminCreationRequestDetailView,
     OffenceListView,
     DeleteOffenceView,
     MarkOffencePaidView,
@@ -120,6 +122,9 @@ urlpatterns = [
     # pending admin registration requests (created by frontend signup)
     path('admin/pending-admins/', PendingAdminListCreateView.as_view(), name='pending-admins'),
     path('admin/pending-admins/<uuid:admin_id>/', PendingAdminDetailView.as_view(), name='pending-admin-detail'),
+    # admin creation requests (from Django admin panel)
+    path('admin/admin-creation-requests/', AdminCreationRequestListView.as_view(), name='admin-creation-requests'),
+    path('admin/admin-creation-requests/<uuid:request_id>/', AdminCreationRequestDetailView.as_view(), name='admin-creation-request-detail'),
     
     path('admin/offences/', OffenceListView.as_view(), name='offence-list'),
     path('admin/offences/<uuid:offence_id>/', DeleteOffenceView.as_view(), name='delete-offence'),

@@ -98,6 +98,12 @@
                     </svg>
                     <span>Approved Admins</span>
                 </a>
+                <a href="#" class="nav-item" data-tab="admin-creations">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 5v14M5 12h14"></path>
+                    </svg>
+                    <span>New Admin Requests</span>
+                </a>
                 <a href="#" class="nav-item" data-tab="offence-stats">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path>
@@ -199,6 +205,42 @@
                             </svg>
                             <h3>No Approved Admins</h3>
                             <p>Administrators will appear here after approval</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Admin Creation Requests Tab -->
+                <div id="admin-creations" class="tab-pane">
+                    <div class="content-header">
+                        <h3>New Admin Creation Requests</h3>
+                        <p>Track admins created from Django admin panel</p>
+                    </div>
+
+                    <div class="table-container">
+                        <table id="admin-creation-requests-table" class="admin-table">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Email</th>
+                                    <th>Registration ID</th>
+                                    <th>Created At</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="admin-creation-requests-body">
+                                <!-- Populated by JavaScript -->
+                            </tbody>
+                        </table>
+                        <div id="admin-creation-empty-state" class="empty-state">
+                            <div class="empty-state-icon">
+                                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+                                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                                    <circle cx="12" cy="7" r="4"></circle>
+                                </svg>
+                            </div>
+                            <h3>No Admin Creation Requests</h3>
+                            <p>New admin requests from Django panel will appear here</p>
                         </div>
                     </div>
                 </div>

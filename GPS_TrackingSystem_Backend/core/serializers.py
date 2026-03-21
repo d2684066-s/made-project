@@ -2,7 +2,7 @@
 from rest_framework import serializers
 import uuid
 from .models import (
-    User, PendingAdmin, Vehicle, Trip, Booking, Offence, RFIDDevice, Issue, Notification
+    User, PendingAdmin, Vehicle, Trip, Booking, Offence, RFIDDevice, Issue, Notification, AdminCreationRequest
 )
 from django.contrib.auth.hashers import make_password, check_password
 
@@ -168,6 +168,21 @@ class NotificationSerializer(serializers.ModelSerializer):
             'driver_phone',
             'vehicle_number',
             'is_read',
+            'created_at'
+        ]
+        read_only_fields = ['id', 'created_at']
+
+
+class AdminCreationRequestSerializer(serializers.ModelSerializer):
+    """Serializer for tracking admin user creations from Django admin panel"""
+    class Meta:
+        model = AdminCreationRequest
+        fields = [
+            'id',
+            'name',
+            'email',
+            'registration_id',
+            'is_notified',
             'created_at'
         ]
         read_only_fields = ['id', 'created_at']

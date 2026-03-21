@@ -8,7 +8,7 @@ from django.utils import timezone
 from django.core.cache import cache
 import logging
 
-from .models import User, PendingAdmin, Vehicle, Booking, Offence, RFIDDevice, Trip, Issue
+from .models import User, PendingAdmin, Vehicle, Booking, Offence, RFIDDevice, Trip, Issue, AdminCreationRequest
 from .serializers import (
     UserCreateSerializer, UserLoginSerializer, UserSerializer,
     TokenResponseSerializer, BookingCreateSerializer, BookingSerializer,
@@ -18,6 +18,7 @@ from .serializers import (
     RFIDDeviceSerializer,
     IssueSerializer, IssueCreateSerializer,
     PendingAdminSerializer,
+    AdminCreationRequestSerializer,
 )
 from .utils import (
     create_access_token, send_otp_mock, verify_otp_mock, generate_otp,
@@ -989,6 +990,63 @@ class PendingAdminDetailView(APIView):
             return Response({"message": "Deleted"}, status=204)
         except PendingAdmin.DoesNotExist:
             return Response({"detail": "Not found"}, status=404)
+
+
+# Admin Creation Request Endpoints (Dev Panel Notifications)
+class AdminCreationRequestListView(APIView):
+    """
+    Get all admin creation requests from Django admin panel.
+    Used by the dev panel to track when admins are created.
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        """Fetch unnotified or all admin creation requests"""
+        # Get unnotified requests first, then all requests
+        unnotified = AdminCreationRequest.objects.filter(is_notified=False).order_by('-created_at')
+        
+        serializer = AdminCreationRequestSerializer(unnotified, many=True)
+        return Response({
+            "admin_creation_requests": serializer.data,
+            "count": unnotified.count()
+        })
+
+
+class AdminCreationRequestDetailView(APIView):
+    """
+    Mark admin creation request as notified (acknowledged by dev panel).
+    """
+    permission_classes = [AllowAny]
+
+    def patch(self, request, request_id):
+        """Mark a specific admin creation request as notified"""
+        try:
+            admin_request = AdminCreationRequest.objects.get(id=request_id)
+            admin_request.is_notified = True
+            admin_request.save()
+            
+            serializer = AdminCreationRequestSerializer(admin_request)
+            return Response({
+                "message": "Admin creation request marked as notified",
+                "admin_request": serializer.data
+            })
+        except AdminCreationRequest.DoesNotExist:
+            return Response(
+                {"detail": "Admin creation request not found"},
+                status=404
+            )
+
+    def delete(self, request, request_id):
+        """Delete an admin creation request"""
+        try:
+            admin_request = AdminCreationRequest.objects.get(id=request_id)
+            admin_request.delete()
+            return Response({"message": "Admin creation request deleted"}, status=204)
+        except AdminCreationRequest.DoesNotExist:
+            return Response(
+                {"detail": "Admin creation request not found"},
+                status=404
+            )
 
 
 class OffenceListView(APIView):

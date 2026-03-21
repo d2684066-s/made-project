@@ -108,6 +108,27 @@ class PendingAdmin(BaseModel):
             self.password = make_password(self.password)
         super().save(*args, **kwargs)
 
+
+# Track admin user creations from Django admin panel
+class AdminCreationRequest(BaseModel):
+    """
+    Tracks when admin users are created in the Django admin panel.
+    Notifies the dev panel about new admin creations.
+    """
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='admin_creation_request')
+    name = models.CharField(max_length=255)
+    email = models.EmailField()
+    registration_id = models.CharField(max_length=50, blank=True, null=True)
+    is_notified = models.BooleanField(default=False)  # Track if dev panel was notified
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [models.Index(fields=['is_notified', '-created_at']),]
+
+    def __str__(self):
+        return f"Admin Creation: {self.name} ({self.email})"
+
     def __str__(self):
         return f"PendingAdmin {self.email}"
 
